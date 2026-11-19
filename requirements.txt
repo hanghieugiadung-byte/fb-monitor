@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+playwright
+apscheduler
+sqlmodel
+python-dotenv
+python-telegram-bot
+loguru
+pydantic-settings
+aiofiles
+jinja2
+python-multipart
+httpx

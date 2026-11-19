@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}FB Monitor 🔍{% endblock %}</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            sidebar: '#0f172a',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <!-- App JS -->
+  <script src="/static/app.js"></script>
+
+  {% block head %}{% endblock %}
+</head>
+<body class="dark h-full bg-gray-950 text-gray-100 flex">
+
+  <!-- ── Sidebar ───────────────────────────────────────────────── -->
+  <aside class="w-56 min-h-screen bg-gray-900 border-r border-gray-800 flex flex-col flex-shrink-0">
+
+    <!-- Logo -->
+    <div class="px-5 py-4 border-b border-gray-800">
+      <span class="text-xl font-bold text-white tracking-tight">FB Monitor 🔍</span>
+    </div>
+
+    <!-- Nav links -->
+    <nav class="flex-1 px-3 py-4 space-y-1">
+      {% set nav_items = [
+        ('/dashboard', '🏠', 'Dashboard'),
+        ('/groups',    '👥', 'Nhóm'),
+        ('/keywords',  '🔑', 'Từ khóa'),
+        ('/posts',     '📋', 'Bài viết'),
+        ('/logs',      '📊', 'Logs'),
+      ] %}
+      {% for href, icon, label in nav_items %}
+        {% set is_active = request.url.path == href %}
+        <a href="{{ href }}"
+           class="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors
+                  {% if is_active %}bg-blue-600 text-white{% else %}text-gray-400 hover:bg-gray-800 hover:text-white{% endif %}">
+          <span class="text-base">{{ icon }}</span>
+          <span>{{ label }}</span>
+        </a>
+      {% endfor %}
+    </nav>
+
+    <!-- Footer -->
+    <div class="px-4 py-3 border-t border-gray-800 text-xs text-gray-600">
+      v1.0 &bull; FB Monitor
+    </div>
+  </aside>
+
+  <!-- ── Main area ─────────────────────────────────────────────── -->
+  <div class="flex-1 flex flex-col min-h-screen overflow-hidden">
+
+    <!-- Top bar -->
+    <header class="h-14 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-6 flex-shrink-0">
+      <h1 class="text-sm font-semibold text-gray-300">{% block page_title %}FB Monitor{% endblock %}</h1>
+      <div class="flex items-center gap-2 text-sm text-gray-400">
+        <span class="relative flex h-2.5 w-2.5">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+          <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+        </span>
+        <span>Đang chạy</span>
+      </div>
+    </header>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) if get_flashed_messages is defined else [] %}
+      {% if messages %}
+        <div class="px-6 pt-4 space-y-2">
+          {% for category, message in messages %}
+            <div class="flex items-center gap-2 px-4 py-3 rounded-lg text-sm
+                        {% if category == 'error' %}bg-red-900/50 border border-red-700 text-red-300
+                        {% else %}bg-green-900/50 border border-green-700 text-green-300{% endif %}">
+              {% if category == 'error' %}❌{% else %}✅{% endif %}
+              {{ message }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <!-- Toast container -->
+    <div id="toast-container"
+         class="fixed top-5 right-5 z-50 flex flex-col gap-2 w-80 pointer-events-none">
+    </div>
+
+    <!-- Page content -->
+    <main class="flex-1 overflow-y-auto p-6">
+      {% block content %}{% endblock %}
+    </main>
+
+  </div><!-- /main area -->
+
+</body>
+</html>

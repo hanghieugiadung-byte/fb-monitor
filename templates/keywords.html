@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý Từ khóa — FB Monitor{% endblock %}
+{% block page_title %}🔑 Quản lý Từ khóa theo dõi{% endblock %}
+
+{% block content %}
+<div x-data="keywordsManager()" class="space-y-6">
+
+  <!-- ── Form thêm Từ khóa ────────────────────────────────────── -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+    <!-- Thêm đơn lẻ -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5 flex flex-col justify-between">
+      <div>
+        <h2 class="text-sm font-semibold text-gray-300 mb-2">➕ Thêm từ khóa đơn lẻ</h2>
+        <p class="text-xs text-gray-500 mb-4">Nhập một từ hoặc cụm từ bạn muốn giám sát (VD: tuyển dụng, mua bán, freelancer, báo giá,...)</p>
+      </div>
+
+      <form @submit.prevent="addSingleKeyword()" class="flex gap-3">
+        <input
+          type="text"
+          x-model="singleText"
+          required
+          placeholder="Nhập từ khóa..."
+          class="flex-1 bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+        <button
+          type="submit"
+          :disabled="submitting"
+          class="px-5 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors flex-shrink-0"
+        >
+          Thêm
+        </button>
+      </form>
+    </div>
+
+    <!-- Thêm hàng loạt -->
+    <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+      <h2 class="text-sm font-semibold text-gray-300 mb-2">📋 Thêm từ khóa hàng loạt</h2>
+      <p class="text-xs text-gray-500 mb-3">Dán danh sách từ khóa, mỗi từ khóa trên một dòng riêng biệt:</p>
+
+      <form @submit.prevent="addBulkKeywords()" class="space-y-3">
+        <textarea
+          x-model="bulkText"
+          rows="3"
+          placeholder="tuyển dụng reactjs&#10;tìm việc nodejs&#10;cần tìm dev python"
+          class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        ></textarea>
+        <div class="flex justify-end">
+          <button
+            type="submit"
+            :disabled="submittingBulk || !bulkText.trim()"
+            class="px-4 py-1.5 rounded-lg text-sm font-medium bg-gray-800 hover:bg-gray-700 disabled:opacity-50 text-white transition-colors"
+          >
+            <span x-show="!submittingBulk">Nhập hàng loạt</span>
+            <span x-show="submittingBulk">Đang xử lý...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- ── Danh sách Từ khóa ──────────────────────────────────── -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="text-sm font-semibold text-gray-300">
+        Danh sách từ khóa ({{ keywords|length }} từ khóa)
+      </h2>
+      <span class="text-xs text-gray-500">Bấm vào tag để Bật/Tắt theo dõi</span>
+    </div>
+
+    {% if keywords %}
+    <div class="flex flex-wrap gap-2.5">
+      {% for kw in keywords %}
+      <div class="group inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all
+        {% if kw.is_active %}bg-blue-950/60 border-blue-800 text-blue-200 hover:border-blue-700
+        {% else %}bg-gray-950/60 border-gray-800 text-gray-500 hover:border-gray-700{% endif %}">
+        
+        <!-- Toggle button -->
+        <button
+          @click="toggleKeyword({{ kw.id }})"
+          title="Bấm để {{ 'tạm dừng' if kw.is_active else 'bật theo dõi' }}"
+          class="flex items-center gap-1.5 focus:outline-none cursor-pointer"
+        >
+          <span class="w-2 h-2 rounded-full {{ 'bg-green-400' if kw.is_active else 'bg-gray-600' }}"></span>
+          <span>{{ kw.text }}</span>
+        </button>
+
+        <!-- Delete button -->
+        <button
+          @click="deleteKeyword({{ kw.id }}, '{{ kw.text }}')"
+          title="Xóa từ khóa"
+          class="text-gray-500 hover:text-red-400 ml-1 text-xs focus:outline-none opacity-60 group-hover:opacity-100"
+        >
+          ✕
+        </button>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="py-12 text-center text-gray-600 text-sm">
+      Chưa có từ khóa nào. Hãy thêm từ khóa ở phía trên để hệ thống bắt đầu lọc bài viết!
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+function keywordsManager() {
+  return {
+    singleText: '',
+    bulkText: '',
+    submitting: false,
+    submittingBulk: false,
+
+    async addSingleKeyword() {
+      if (!this.singleText.trim()) return;
+      this.submitting = true;
+      try {
+        const res = await fetch('/api/keywords/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: this.singleText.trim() })
+        });
+        if (res.ok) {
+          showToast('Đã thêm từ khóa thành công!', 'success');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Từ khóa đã tồn tại hoặc không hợp lệ', 'error');
+        }
+      } catch {
+        showToast('Lỗi kết nối máy chủ', 'error');
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    async addBulkKeywords() {
+      const lines = this.bulkText
+        .split('\n')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+      if (lines.length === 0) return;
+
+      this.submittingBulk = true;
+      try {
+        const res = await fetch('/api/keywords/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ texts: lines })
+        });
+        if (res.ok) {
+          showToast(`Đã thêm ${lines.length} từ khóa thành công!`, 'success');
+          setTimeout(() => location.reload(), 600);
+        } else {
+          showToast('Có lỗi khi thêm từ khóa hàng loạt', 'error');
+        }
+      } catch {
+        showToast('Lỗi kết nối máy chủ', 'error');
+      } finally {
+        this.submittingBulk = false;
+      }
+    },
+
+    async toggleKeyword(id) {
+      try {
+        const res = await fetch(`/api/keywords/${id}/toggle`, { method: 'POST' });
+        if (res.ok) {
+          showToast('Đã thay đổi trạng thái từ khóa!', 'success');
+          setTimeout(() => location.reload(), 500);
+        }
+      } catch {
+        showToast('Lỗi kết nối máy chủ', 'error');
+      }
+    },
+
+    deleteKeyword(id, text) {
+      confirmDelete(`/api/keywords/${id}`, text);
+    }
+  };
+}
+</script>
+{% endblock %}

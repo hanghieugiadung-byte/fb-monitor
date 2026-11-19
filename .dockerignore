@@ -1,0 +1,17 @@
+.venv
+venv
+ENV
+env
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.log
+.git
+.gitignore
+.dockerignore
+.idea
+.vscode
+*.db-journal
+test_*.py

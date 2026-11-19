@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+
+{% block title %}Quản lý Nhóm Facebook — FB Monitor{% endblock %}
+{% block page_title %}👥 Quản lý Nhóm Facebook{% endblock %}
+
+{% block content %}
+<div x-data="groupsManager()" class="space-y-6">
+
+  <!-- ── Form thêm Nhóm ─────────────────────────────────────── -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl p-5">
+    <h2 class="text-sm font-semibold text-gray-300 mb-4">➕ Thêm nhóm Facebook mới theo dõi</h2>
+
+    <form @submit.prevent="addGroup()" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs text-gray-400 mb-1">Tên gợi nhớ của nhóm</label>
+        <input
+          type="text"
+          x-model="form.name"
+          required
+          placeholder="VD: Việc làm IT Toàn Quốc"
+          class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+        />
+      </div>
+
+      <div class="md:col-span-2 flex gap-3 items-end">
+        <div class="flex-1">
+          <label class="block text-xs text-gray-400 mb-1">Link nhóm Facebook (URL)</label>
+          <input
+            type="text"
+            x-model="form.fb_url"
+            required
+            placeholder="https://www.facebook.com/groups/123456789..."
+            class="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        <button
+          type="submit"
+          :disabled="submitting"
+          class="px-5 py-2 rounded-lg text-sm font-medium bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-colors flex-shrink-0"
+        >
+          <span x-show="!submitting">Thêm nhóm</span>
+          <span x-show="submitting">Đang lưu...</span>
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- ── Danh sách Nhóm ────────────────────────────────────── -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-gray-300">
+        Danh sách nhóm đang quản lý ({{ groups|length }} nhóm)
+      </h2>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wide">
+            <th class="px-5 py-3 text-left">Tên nhóm</th>
+            <th class="px-5 py-3 text-left">URL Facebook</th>
+            <th class="px-5 py-3 text-center">Trạng thái</th>
+            <th class="px-5 py-3 text-left">Lần quét cuối</th>
+            <th class="px-5 py-3 text-right">Hành động</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for group in groups %}
+          <tr class="hover:bg-gray-800/50 transition-colors">
+            <td class="px-5 py-3 font-medium text-gray-200">{{ group.name }}</td>
+            <td class="px-5 py-3 text-gray-400">
+              <a href="{{ group.fb_url }}" target="_blank" class="text-blue-400 hover:underline truncate inline-block max-w-xs">
+                {{ group.fb_url }} ↗
+              </a>
+            </td>
+            <td class="px-5 py-3 text-center">
+              <button
+                @click="toggleGroup({{ group.id }})"
+                class="px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer transition-colors
+                  {% if group.is_active %}bg-green-900/80 text-green-300 hover:bg-green-800
+                  {% else %}bg-gray-800 text-gray-500 hover:bg-gray-700{% endif %}"
+              >
+                {{ '🟢 Đang theo dõi' if group.is_active else '⚪ Đã tạm dừng' }}
+              </button>
+            </td>
+            <td class="px-5 py-3 text-gray-500 text-xs whitespace-nowrap">
+              {{ group.last_scraped_at.strftime('%d/%m/%Y %H:%M') if group.last_scraped_at else 'Chưa quét' }}
+            </td>
+            <td class="px-5 py-3 text-right">
+              <button
+                @click="deleteGroup({{ group.id }}, '{{ group.name }}')"
+                class="text-red-400 hover:text-red-300 text-xs font-medium px-2 py-1 rounded hover:bg-red-950 transition-colors"
+              >
+                Xóa
+              </button>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="5" class="px-5 py-10 text-center text-gray-600">
+              Chưa có nhóm nào được thêm. Hãy nhập form phía trên để bắt đầu theo dõi!
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function groupsManager() {
+  return {
+    form: {
+      name: '',
+      fb_url: ''
+    },
+    submitting: false,
+
+    async addGroup() {
+      if (!this.form.fb_url.includes('facebook.com/groups/')) {
+        showToast('URL nhóm phải có định dạng https://www.facebook.com/groups/...', 'error');
+        return;
+      }
+
+      this.submitting = true;
+      try {
+        const res = await fetch('/api/groups/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.form)
+        });
+
+        if (res.ok) {
+          showToast('Thêm nhóm thành công!', 'success');
+          setTimeout(() => location.reload(), 600);
+        } else {
+          const err = await res.json().catch(() => ({}));
+          showToast(err.detail || 'Không thể thêm nhóm', 'error');
+        }
+      } catch {
+        showToast('Lỗi kết nối máy chủ', 'error');
+      } finally {
+        this.submitting = false;
+      }
+    },
+
+    async toggleGroup(id) {
+      try {
+        const res = await fetch(`/api/groups/${id}/toggle`, { method: 'POST' });
+        if (res.ok) {
+          showToast('Đã đổi trạng thái nhóm!', 'success');
+          setTimeout(() => location.reload(), 500);
+        } else {
+          showToast('Lỗi cập nhật trạng thái', 'error');
+        }
+      } catch {
+        showToast('Lỗi kết nối máy chủ', 'error');
+      }
+    },
+
+    deleteGroup(id, name) {
+      confirmDelete(`/api/groups/${id}`, name);
+    }
+  };
+}
+</script>
+{% endblock %}

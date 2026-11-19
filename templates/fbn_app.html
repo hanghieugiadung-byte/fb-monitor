@@ -1,0 +1,2103 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FB Monitor — Facebook Group Intelligence Platform</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#2563eb',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased" x-data="app()" x-init="initApp()">
+
+  <!-- ── Top Header ────────────────────────────────────────────── -->
+  <header class="bg-slate-900 border-b border-slate-800 px-6 py-3.5 flex items-center justify-between sticky top-0 z-40">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center text-white text-lg font-bold shadow-md shadow-blue-500/20">
+        FB
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-white tracking-tight flex items-center gap-2">
+          FB Monitor <span class="text-xs px-2 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-800 font-mono">fbn PRO</span>
+        </h1>
+        <p class="text-xs text-slate-400">Giám sát & Quét Nhóm Facebook • Đa tài khoản • Tìm kiếm Group</p>
+      </div>
+    </div>
+
+    <!-- Status Badges & Quick Monitor Toggle -->
+    <div class="flex items-center gap-4">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs">
+        <span class="w-2.5 h-2.5 rounded-full" :class="config.monitor_active ? 'bg-emerald-400 animate-pulse' : 'bg-slate-600'"></span>
+        <span class="text-slate-300 font-medium" x-text="config.monitor_active ? 'Giám sát: Đang chạy' : 'Giám sát: Đã tạm dừng'"></span>
+        <button
+          @click="toggleMonitor()"
+          class="ml-2 px-2 py-0.5 rounded text-xs font-semibold transition-colors"
+          :class="config.monitor_active ? 'bg-amber-900/80 text-amber-200 hover:bg-amber-800' : 'bg-emerald-900/80 text-emerald-200 hover:bg-emerald-800'"
+          x-text="config.monitor_active ? 'Tắt' : 'Bật'"
+        ></button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Navigation Bar ────────────────────────────────────────── -->
+  <nav class="bg-slate-900/70 border-b border-slate-800 px-6 flex gap-2 overflow-x-auto">
+    <button
+      @click="currentTab = 'dashboard'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'dashboard' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>📊</span> Dashboard & Quét
+    </button>
+    <button
+      @click="currentTab = 'discovery'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'discovery' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>🔍</span> Tìm kiếm Nhóm
+    </button>
+    <button
+      @click="currentTab = 'repository'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'repository' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>📁</span> Kho Nhóm & Chủ đề (<span x-text="groups.length"></span>)
+    </button>
+    <button
+      @click="currentTab = 'schedules'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'schedules' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>⏰</span> Lịch Quét & Khung Giờ (<span x-text="schedules.length"></span>)
+    </button>
+    <button
+      @click="currentTab = 'accounts'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'accounts' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>👤</span> Đa Tài Khoản (<span x-text="accounts.length"></span>)
+    </button>
+    <button
+      @click="currentTab = 'targets'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'targets' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>👥</span> Nhóm & Từ khóa (<span x-text="groups.length"></span> nhóm)
+    </button>
+    <button
+      @click="currentTab = 'settings'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'settings' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>⚙️</span> Cài đặt Telegram & Chu kỳ
+    </button>
+    <button
+      @click="currentTab = 'posts'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'posts' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>📋</span> Bài viết (<span x-text="stats.seen_posts_total"></span>)
+    </button>
+    <button
+      @click="currentTab = 'logs'"
+      class="px-4 py-3 text-sm font-medium border-b-2 transition-all flex items-center gap-2 whitespace-nowrap"
+      :class="currentTab === 'logs' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'"
+    >
+      <span>📜</span> Logs
+    </button>
+  </nav>
+
+  <!-- ── Main Content Area ─────────────────────────────────────── -->
+  <main class="flex-1 p-6 max-w-7xl w-full mx-auto space-y-6">
+
+    <!-- Toast Notification -->
+    <div
+      x-show="toast.show"
+      x-transition
+      class="fixed top-5 right-5 z-50 flex items-center gap-3 px-4 py-3 rounded-lg border text-sm shadow-xl font-medium"
+      :class="{
+        'bg-emerald-950 border-emerald-800 text-emerald-200': toast.type === 'success',
+        'bg-rose-950 border-rose-800 text-rose-200': toast.type === 'error',
+        'bg-blue-950 border-blue-800 text-blue-200': toast.type === 'info',
+        'bg-amber-950 border-amber-800 text-amber-200': toast.type === 'warning',
+      }"
+    >
+      <span x-text="toast.message"></span>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 1: DASHBOARD & SELECTIVE SCAN                            -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'dashboard'" class="space-y-6">
+
+      <!-- Stat Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Tài khoản Facebook</p>
+            <p class="text-xl font-bold text-emerald-400" x-text="accounts.filter(a => a.is_active).length + ' / ' + accounts.length + ' sẵn sàng'"></p>
+            <p class="text-[11px] text-slate-500">Hỗ trợ xoay vòng nick</p>
+          </div>
+          <span class="text-2xl">👤</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Nhóm theo dõi</p>
+            <p class="text-xl font-bold text-blue-400" x-text="groups.filter(g => g.is_active).length + ' nhóm đang bật'"></p>
+            <p class="text-[11px] text-slate-500" x-text="'Tổng cộng: ' + groups.length + ' nhóm'"></p>
+          </div>
+          <span class="text-2xl">👥</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Từ khóa lọc</p>
+            <p class="text-xl font-bold text-purple-400" x-text="keywords.filter(k => k.is_active).length + ' từ khóa'"></p>
+            <p class="text-[11px] text-slate-500" x-text="keywords.length === 0 ? 'Quét 100% bài mới' : 'Lọc theo từ khóa'"></p>
+          </div>
+          <span class="text-2xl">🔑</span>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
+          <div>
+            <p class="text-xs text-slate-400">Bài viết đã lưu</p>
+            <p class="text-2xl font-bold text-yellow-400" x-text="stats.seen_posts_total"></p>
+            <p class="text-[11px] text-slate-500">Chống trùng lặp tuyệt đối</p>
+          </div>
+          <span class="text-2xl">📦</span>
+        </div>
+      </div>
+
+      <!-- SELECTIVE SCAN CONTROL PANEL -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-sm font-bold text-white flex items-center gap-2">
+              🎯 Tùy chọn Quét có chọn lọc (Selective Scan)
+            </h2>
+            <p class="text-xs text-slate-400">Tùy chọn chính xác nhóm, từ khóa và tài khoản muốn quét mà không cần quét toàn bộ</p>
+          </div>
+
+          <div class="flex gap-2">
+            <button
+              @click="triggerCheck(false)"
+              :disabled="isRunningCheck || selectedGroupIds.length === 0"
+              class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2"
+            >
+              <span x-show="!isRunningCheck">🚀 Quét các mục đã chọn</span>
+              <span x-show="isRunningCheck" class="animate-spin">⏳</span>
+              <span x-show="isRunningCheck">Đang cào dữ liệu...</span>
+            </button>
+
+            <button
+              @click="triggerCheck(true)"
+              :disabled="isRunningCheck || selectedGroupIds.length === 0"
+              class="px-4 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 transition-colors"
+            >
+              Quét thử (Dry Run)
+            </button>
+          </div>
+        </div>
+
+        <!-- 3 Selector Columns -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-1">
+
+          <!-- 1. Chọn Nhóm -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">1. Chọn Nhóm muốn quét (<span x-text="selectedGroupIds.length + '/' + groups.length"></span>)</span>
+              <div class="flex gap-2 text-xs">
+                <button @click="selectAllGroups(true)" class="text-blue-400 hover:underline">Tất cả</button>
+                <span class="text-slate-600">|</span>
+                <button @click="selectAllGroups(false)" class="text-slate-500 hover:underline">Bỏ chọn</button>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-48 overflow-y-auto space-y-1.5 text-xs">
+              <template x-for="g in groups" :key="g.id">
+                <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-900 cursor-pointer">
+                  <input type="checkbox" :value="g.id" x-model="selectedGroupIds" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0" />
+                  <span class="truncate font-medium text-slate-200" x-text="g.name"></span>
+                </label>
+              </template>
+              <div x-show="groups.length === 0" class="text-slate-600 italic py-2 text-center">Chưa có nhóm nào.</div>
+            </div>
+          </div>
+
+          <!-- 2. Chọn Từ khóa -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-300">2. Chọn Từ khóa lọc (<span x-text="selectedKeywordIds.length + '/' + keywords.length"></span>)</span>
+              <div class="flex gap-2 text-xs">
+                <button @click="selectAllKeywords(true)" class="text-blue-400 hover:underline">Tất cả</button>
+                <span class="text-slate-600">|</span>
+                <button @click="selectAllKeywords(false)" class="text-slate-500 hover:underline">Bỏ chọn</button>
+              </div>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-48 overflow-y-auto space-y-1.5 text-xs">
+              <template x-for="k in keywords" :key="k.id">
+                <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-slate-900 cursor-pointer">
+                  <input type="checkbox" :value="k.id" x-model="selectedKeywordIds" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0" />
+                  <span class="truncate text-slate-300" x-text="'#' + k.text"></span>
+                </label>
+              </template>
+              <div x-show="keywords.length === 0" class="text-slate-500 italic py-2 text-center">
+                Không chọn từ khóa = Quét toàn bộ bài mới.
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Chọn Tài khoản Thực hiện -->
+          <div class="space-y-2">
+            <span class="text-xs font-bold text-slate-300">3. Chọn Tài khoản thực hiện cào</span>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-lg p-3 space-y-3 text-xs">
+              <div>
+                <label class="block text-slate-400 mb-1">Tài khoản sử dụng:</label>
+                <select
+                  x-model="selectedAccountId"
+                  class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+                >
+                  <option :value="null">🔄 Tự động xoay vòng tài khoản (Round-robin)</option>
+                  <template x-for="acc in accounts" :key="acc.id">
+                    <option :value="acc.id" x-text="acc.name + (acc.c_user ? ' (' + acc.c_user + ')' : '')"></option>
+                  </template>
+                </select>
+              </div>
+
+              <div class="text-[11px] text-slate-500 leading-relaxed">
+                💡 <em>Chế độ xoay vòng:</em> Hệ thống sẽ tự động chọn tài khoản có thời gian quét lâu nhất để chia đều request, tránh bị Facebook giới hạn tần suất.
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Live Terminal / Execution Log Box -->
+      <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+        <div class="bg-slate-900 px-4 py-2.5 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+            <span class="w-2.5 h-2.5 rounded-full bg-red-500/80"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-500/80"></span>
+            <span class="w-2.5 h-2.5 rounded-full bg-green-500/80"></span>
+            <span class="ml-2 text-slate-300 font-semibold">Console Output / Live Log</span>
+          </div>
+          <button @click="liveLogs = []" class="text-xs text-slate-500 hover:text-slate-300">Xóa log</button>
+        </div>
+
+        <div class="p-4 font-mono text-xs leading-relaxed max-h-72 overflow-y-auto space-y-1 bg-black/40">
+          <template x-for="(line, idx) in liveLogs" :key="idx">
+            <div
+              :class="{
+                'text-emerald-400': line.includes('✓') || line.includes('Hoàn tất') || line.includes('thành công'),
+                'text-rose-400 font-bold': line.includes('LỖI') || line.includes('✕') || line.includes('thất bại'),
+                'text-amber-300': line.includes('⚠️') || line.includes('CẢNH BÁO'),
+                'text-blue-300': line.includes('★') || line.includes('Đang quét') || line.includes('Khởi động'),
+                'text-slate-400': !line.includes('✓') && !line.includes('LỖI') && !line.includes('★') && !line.includes('⚠️')
+              }"
+              x-text="line"
+            ></div>
+          </template>
+          <div x-show="liveLogs.length === 0" class="text-slate-600 italic">
+            Chưa có tiến trình nào được chạy. Hãy nhấn "Quét các mục đã chọn" ở trên để xem tiến trình thời gian thực.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 2: GROUP DISCOVERY (TÌM KIẾM NHÓM TỰ ĐỘNG)               -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'discovery'" class="space-y-6">
+
+      <!-- Search Form -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            🔍 Tự động Tìm kiếm Nhóm Facebook theo Từ khóa & Điều kiện
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Tìm kiếm hàng loạt nhóm Facebook theo chủ đề, lọc số lượng thành viên và loại nhóm (Công khai/Riêng tư), sau đó thêm vào danh sách theo dõi chỉ với 1 click!
+          </p>
+        </div>
+
+        <form @submit.prevent="runDiscovery()" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Keyword -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Từ khóa tìm nhóm</label>
+            <input
+              type="text"
+              x-model="discoveryForm.keyword"
+              required
+              placeholder="VD: máy rửa bát, freelancer, việc làm..."
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <!-- Min Members Filter -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Số thành viên tối thiểu</label>
+            <select
+              x-model.number="discoveryForm.min_members"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              <option value="0">Tất cả quy mô</option>
+              <option value="1000">&gt;= 1,000 thành viên</option>
+              <option value="5000">&gt;= 5,000 thành viên</option>
+              <option value="10000">&gt;= 10,000 thành viên</option>
+              <option value="50000">&gt;= 50,000 thành viên</option>
+            </select>
+          </div>
+
+          <!-- Privacy Filter -->
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Loại nhóm</label>
+            <select
+              x-model="discoveryForm.privacy"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              <option value="all">Tất cả (Công khai & Riêng tư)</option>
+              <option value="public">Chỉ Nhóm Công khai (Public)</option>
+              <option value="private">Chỉ Nhóm Riêng tư (Private)</option>
+            </select>
+          </div>
+
+          <!-- Submit Button -->
+          <div class="flex items-end">
+            <button
+              type="submit"
+              :disabled="isDiscovering"
+              class="w-full py-2.5 px-4 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2"
+            >
+              <span x-show="!isDiscovering">🔍 Bắt đầu tìm kiếm</span>
+              <span x-show="isDiscovering" class="animate-spin">⏳</span>
+              <span x-show="isDiscovering">Đang quét Facebook...</span>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Discovered Groups Results -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-bold text-slate-200">
+              Kết quả tìm kiếm nhóm (<span x-text="discoveredResults.length"></span> nhóm tìm thấy)
+            </h3>
+            <p class="text-xs text-slate-400">Chọn tham gia hoặc thêm vào giám sát. Khi chọn xong, liên kết sẽ tự động ẩn đi.</p>
+          </div>
+          <button
+            x-show="joinedGroupIds.length > 0"
+            @click="clearJoinedCache()"
+            class="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+          >
+            ↺ Đặt lại trạng thái đã tham gia (<span x-text="joinedGroupIds.length"></span>)
+          </button>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Tên nhóm Facebook</th>
+                <th class="px-5 py-3 text-left">Số thành viên</th>
+                <th class="px-5 py-3 text-center">Quyền riêng tư</th>
+                <th class="px-5 py-3 text-left">Mô tả / Hoạt động</th>
+                <th class="px-5 py-3 text-center">1. Tham gia nhóm</th>
+                <th class="px-5 py-3 text-center">2. Thêm vào giám sát</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="item in discoveredResults" :key="item.clean_group_id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3 font-semibold text-slate-200">
+                    <a :href="item.fb_url" target="_blank" class="hover:text-blue-400 transition-colors" x-text="item.name"></a>
+                    <p class="text-[11px] text-slate-500 font-mono" x-text="item.clean_group_id"></p>
+                  </td>
+                  <td class="px-5 py-3 text-slate-300 font-mono text-xs" x-text="item.member_text"></td>
+                  <td class="px-5 py-3 text-center">
+                    <span class="px-2 py-0.5 rounded text-xs font-semibold"
+                      :class="item.privacy === 'public' ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' : 'bg-amber-950 text-amber-300 border border-amber-900'"
+                      x-text="item.privacy === 'public' ? 'Công khai' : (item.privacy === 'private' ? 'Riêng tư' : '—')"
+                    ></span>
+                  </td>
+                  <td class="px-5 py-3 text-xs text-slate-400 max-w-sm">
+                    <p x-text="item.snippet || '—'"></p>
+                    <div class="mt-1 flex items-center gap-1.5">
+                      <span
+                        class="px-2 py-0.5 rounded text-[10px] font-semibold"
+                        :class="item.post_permission === 'approval' ? 'bg-amber-950 text-amber-300 border border-amber-900' : 'bg-emerald-950 text-emerald-300 border border-emerald-900'"
+                        x-text="item.post_permission_text || 'Đăng tự do'"
+                      ></span>
+                    </div>
+                  </td>
+
+                  <!-- CỘT 1: THAM GIA NHÓM -->
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <!-- Chưa click tham gia: Hiện link mở nhóm -->
+                    <template x-if="!isGroupJoined(item.clean_group_id)">
+                      <a
+                        :href="item.fb_url"
+                        target="_blank"
+                        @click="markGroupJoined(item.clean_group_id)"
+                        class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 border border-slate-700 hover:border-blue-500 shadow-sm transition-all"
+                        title="Mở Facebook để gửi yêu cầu tham gia nhóm"
+                      >
+                        <span>👥</span> Mở tham gia ↗
+                      </a>
+                    </template>
+
+                    <!-- Đã chọn tham gia: Ẩn link, hiện trạng thái hoàn thành -->
+                    <template x-if="isGroupJoined(item.clean_group_id)">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800">
+                        <span>✓</span> Đã tham gia
+                      </span>
+                    </template>
+                  </td>
+
+                  <!-- CỘT 2: THÊM VÀO GIÁM SÁT & CHỌN CHỦ ĐỀ -->
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <!-- Chưa thêm vào giám sát: Hiện dropdown chủ đề + nút thêm -->
+                    <template x-if="!isGroupMonitored(item.clean_group_id)">
+                      <div class="inline-flex items-center gap-1.5 justify-center">
+                        <select
+                          x-model="item.selectedTopic"
+                          class="bg-slate-950 border border-slate-800 rounded px-1.5 py-1 text-[11px] text-slate-300 focus:outline-none"
+                        >
+                          <option value="Chưa phân loại">Chủ đề...</option>
+                          <template x-for="t in topics" :key="t.id">
+                            <option :value="t.name" x-text="t.name"></option>
+                          </template>
+                        </select>
+                        <button
+                          @click="addDiscoveredToTargets(item)"
+                          class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-all"
+                        >
+                          <span>➕</span> Thêm
+                        </button>
+                      </div>
+                    </template>
+
+                    <!-- Đã thêm vào giám sát: Ẩn nút, hiện trạng thái hoàn thành -->
+                    <template x-if="isGroupMonitored(item.clean_group_id)">
+                      <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-950/80 text-blue-400 border border-blue-800">
+                        <span>✓</span> Đã giám sát
+                      </span>
+                    </template>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="discoveredResults.length === 0">
+                <td colspan="6" class="px-5 py-12 text-center text-slate-600">
+                  Chưa có kết quả tìm kiếm nào. Hãy nhập từ khóa ở trên và bấm "Bắt đầu tìm kiếm".
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB: REPOSITORY (KHO LƯU TRỮ & PHÂN LOẠI CHỦ ĐỀ NHÓM)       -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'repository'" class="space-y-6">
+
+      <!-- Header & Actions -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            📁 Kho Lưu Trữ & Phân Loại Nhóm Facebook
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Quản lý tập trung toàn bộ nhóm đã tìm kiếm và quét, phân loại theo chủ đề, kiểm tra quyền đăng bài & bình luận, theo dõi trạng thái tham gia.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+          <button
+            @click="showAddTopicModal = !showAddTopicModal"
+            class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow transition-all flex items-center gap-1.5"
+          >
+            <span>🏷️</span> Thêm chủ đề mới
+          </button>
+        </div>
+      </div>
+
+      <!-- Topic Filter Chips & Management -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-300">Lọc theo Chủ đề:</span>
+          <span class="text-[11px] text-slate-500" x-text="'Tổng cộng: ' + topics.length + ' chủ đề'"></span>
+        </div>
+
+        <div class="flex flex-wrap gap-2 items-center">
+          <button
+            @click="selectedTopicFilter = 'all'"
+            class="px-3 py-1 rounded-lg text-xs font-semibold transition-all border"
+            :class="selectedTopicFilter === 'all' ? 'bg-blue-600 text-white border-blue-500 shadow' : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'"
+          >
+            Tất cả (<span x-text="groups.length"></span>)
+          </button>
+
+          <template x-for="t in topics" :key="t.id">
+            <div class="inline-flex items-center gap-1">
+              <button
+                @click="selectedTopicFilter = t.name"
+                class="px-3 py-1 rounded-lg text-xs font-semibold transition-all border flex items-center gap-1.5"
+                :class="selectedTopicFilter === t.name ? 'bg-purple-600 text-white border-purple-500 shadow' : 'bg-slate-950 text-slate-300 border-slate-800 hover:text-white'"
+              >
+                <span x-text="t.name"></span>
+                <span class="text-[10px] opacity-75" x-text="'(' + groups.filter(g => g.topic_name === t.name).length + ')'"></span>
+              </button>
+              <button
+                @click="deleteTopic(t.id, t.name)"
+                class="text-[11px] text-slate-500 hover:text-rose-400 px-1"
+                title="Xóa chủ đề này"
+              >×</button>
+            </div>
+          </template>
+
+          <button
+            @click="selectedTopicFilter = 'Chưa phân loại'"
+            class="px-3 py-1 rounded-lg text-xs font-semibold transition-all border"
+            :class="selectedTopicFilter === 'Chưa phân loại' ? 'bg-slate-700 text-white border-slate-600' : 'bg-slate-950 text-slate-500 border-slate-800 hover:text-slate-300'"
+          >
+            Chưa phân loại (<span x-text="groups.filter(g => !g.topic_name || g.topic_name === 'Chưa phân loại').length"></span>)
+          </button>
+        </div>
+      </div>
+
+      <!-- Add Topic Form Box -->
+      <div x-show="showAddTopicModal" class="bg-slate-950 border border-purple-900/50 rounded-xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-purple-300">Tạo Chủ Đề Nhóm Mới</span>
+          <button @click="showAddTopicModal = false" class="text-xs text-slate-500 hover:text-slate-300">✕ Đóng</button>
+        </div>
+        <form @submit.prevent="createTopic()" class="flex flex-wrap items-center gap-3">
+          <input
+            type="text"
+            x-model="newTopic.name"
+            placeholder="Tên chủ đề (VD: Điện máy, Mua bán, Mẹ & Bé...)"
+            required
+            class="flex-1 min-w-[200px] bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+          />
+          <select
+            x-model="newTopic.color"
+            class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+          >
+            <option value="blue">Xanh dương (Blue)</option>
+            <option value="emerald">Xanh lá (Emerald)</option>
+            <option value="purple">Tím (Purple)</option>
+            <option value="amber">Vàng hổ phách (Amber)</option>
+            <option value="rose">Hồng đào (Rose)</option>
+            <option value="cyan">Xanh lơ (Cyan)</option>
+          </select>
+          <button
+            type="submit"
+            class="px-4 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white transition-colors"
+          >
+            Lưu chủ đề
+          </button>
+        </form>
+      </div>
+
+      <!-- Groups Repository Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-200">
+            Kho danh sách nhóm (<span x-text="filteredRepositoryGroups.length"></span> nhóm)
+          </h3>
+          <input
+            type="text"
+            x-model="repoSearch"
+            placeholder="Tìm theo tên hoặc ID nhóm..."
+            class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-64"
+          />
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-4 py-3 text-left">Tên nhóm Facebook</th>
+                <th class="px-4 py-3 text-left">Chủ đề phân loại</th>
+                <th class="px-4 py-3 text-left">Quyền Đăng bài & Bình luận</th>
+                <th class="px-4 py-3 text-left">Thành viên / Quy mô</th>
+                <th class="px-4 py-3 text-center">Tham gia nhóm</th>
+                <th class="px-4 py-3 text-center">Giám sát</th>
+                <th class="px-4 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="g in filteredRepositoryGroups" :key="g.id">
+                <tr class="hover:bg-slate-800/40">
+                  <!-- Name & Link -->
+                  <td class="px-4 py-3">
+                    <a :href="g.fb_url" target="_blank" class="font-semibold text-slate-200 hover:text-blue-400 transition-colors flex items-center gap-1.5" x-text="g.name"></a>
+                    <p class="text-[11px] text-slate-500 font-mono" x-text="g.clean_group_id"></p>
+                  </td>
+
+                  <!-- Topic Dropdown -->
+                  <td class="px-4 py-3">
+                    <select
+                      :value="g.topic_name || 'Chưa phân loại'"
+                      @change="updateGroupTopic(g.id, $event.target.value)"
+                      class="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+                    >
+                      <option value="Chưa phân loại">Chưa phân loại</option>
+                      <template x-for="t in topics" :key="t.id">
+                        <option :value="t.name" :selected="g.topic_name === t.name" x-text="t.name"></option>
+                      </template>
+                    </select>
+                  </td>
+
+                  <!-- Post & Comment Permissions -->
+                  <td class="px-4 py-3 text-xs space-y-1">
+                    <div class="flex items-center gap-1.5">
+                      <span
+                        class="px-2 py-0.5 rounded text-[11px] font-semibold"
+                        :class="{
+                          'bg-emerald-950 text-emerald-300 border border-emerald-900': g.post_permission === 'free',
+                          'bg-amber-950 text-amber-300 border border-amber-900': g.post_permission === 'approval',
+                          'bg-rose-950 text-rose-300 border border-rose-900': g.post_permission === 'admin_only',
+                          'bg-slate-800 text-slate-400': !g.post_permission || g.post_permission === 'unknown'
+                        }"
+                        x-text="g.post_permission_text || 'Chưa kiểm tra'"
+                      ></span>
+
+                      <button
+                        @click="checkGroupPermission(g.id)"
+                        class="text-[10px] text-blue-400 hover:text-blue-300 bg-slate-950 px-1.5 py-0.5 rounded border border-slate-800"
+                        title="Kiểm tra lại quyền đăng bài & bình luận tự động"
+                      >
+                        🔍 Kiểm tra
+                      </button>
+                    </div>
+
+                    <div class="text-[11px] text-slate-400 flex items-center gap-1">
+                      <span>💬</span>
+                      <span x-text="g.comment_permission_text || 'Bình luận mở'"></span>
+                    </div>
+                  </td>
+
+                  <!-- Members & Privacy -->
+                  <td class="px-4 py-3 text-xs">
+                    <p class="font-mono text-slate-300" x-text="g.member_count ? Number(g.member_count).toLocaleString() + ' TV' : '—'"></p>
+                    <span
+                      class="text-[10px]"
+                      :class="g.privacy === 'public' ? 'text-emerald-400' : 'text-amber-400'"
+                      x-text="g.privacy === 'public' ? '🌐 Công khai' : (g.privacy === 'private' ? '🔒 Riêng tư' : '—')"
+                    ></span>
+                  </td>
+
+                  <!-- Joined Status -->
+                  <td class="px-4 py-3 text-center whitespace-nowrap">
+                    <button
+                      @click="toggleGroupJoined(g.id)"
+                      class="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                      :class="g.is_joined ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' : 'bg-slate-800 text-slate-400 hover:text-slate-200'"
+                      :title="g.is_joined ? 'Bấm để chuyển trạng thái' : 'Bấm để đánh dấu đã tham gia'"
+                    >
+                      <span x-text="g.is_joined ? '✓ Đã tham gia' : 'Chưa tham gia'"></span>
+                    </button>
+                  </td>
+
+                  <!-- Monitored Toggle -->
+                  <td class="px-4 py-3 text-center whitespace-nowrap">
+                    <button
+                      @click="toggleGroup(g.id)"
+                      class="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                      :class="g.is_active ? 'bg-blue-950 text-blue-300 border border-blue-900' : 'bg-slate-800 text-slate-500'"
+                      x-text="g.is_active ? '🟢 Bật quét' : '⚪ Đang tắt'"
+                    ></button>
+                  </td>
+
+                  <!-- Actions -->
+                  <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      @click="deleteGroup(g.id, g.name)"
+                      class="text-rose-400 hover:text-rose-300 text-xs font-semibold px-2 py-1"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="filteredRepositoryGroups.length === 0">
+                <td colspan="7" class="px-5 py-8 text-center text-slate-600">
+                  Không tìm thấy nhóm nào trong chủ đề này.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB: SCHEDULES (LỊCH QUÉT TỰ ĐỘNG THEO KHUNG GIỜ)           -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'schedules'" class="space-y-6">
+
+      <!-- Header -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            ⏰ Cài Đặt Lịch Quét Tự Động Theo Khung Giờ & Phân Chia Tài Khoản
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Lập lịch quét độc lập theo từng ca/khung giờ, chọn riêng tài khoản cào và nhóm/từ khóa phụ trách để không bị trùng lặp nhóm và giảm thiểu checkpoint Facebook.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            @click="showAddScheduleModal = !showAddScheduleModal"
+            class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow transition-all flex items-center gap-1.5"
+          >
+            <span x-text="showAddScheduleModal ? '✕ Đóng form' : '➕ Tạo Lịch Quét Mới'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Add Schedule Form -->
+      <div x-show="showAddScheduleModal" class="bg-slate-900 border border-blue-900/40 rounded-xl p-6 space-y-5">
+        <h3 class="text-sm font-bold text-blue-300">Tạo Lịch Quét / Ca Quét Mới</h3>
+
+        <form @submit.prevent="createSchedule()" class="space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Name -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Tên lịch / Ca quét</label>
+              <input
+                type="text"
+                x-model="newSchedule.name"
+                required
+                placeholder="VD: Ca sáng - Điện máy gia dụng, Ca chiều - Việc làm..."
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <!-- Account selection -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Tài khoản Facebook thực hiện</label>
+              <select
+                x-model.number="newSchedule.account_id"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              >
+                <option :value="null">-- Tự động xoay vòng tài khoản trong Pool --</option>
+                <template x-for="acc in accounts" :key="acc.id">
+                  <option :value="acc.id" x-text="acc.name + (acc.c_user ? ' (UID: ' + acc.c_user + ')' : '')"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Start Time -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Khung giờ bắt đầu (HH:MM)</label>
+              <input
+                type="time"
+                x-model="newSchedule.start_time"
+                required
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <!-- End Time -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Khung giờ kết thúc (HH:MM)</label>
+              <input
+                type="time"
+                x-model="newSchedule.end_time"
+                required
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <!-- Interval -->
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Chu kỳ lặp lại</label>
+              <select
+                x-model.number="newSchedule.interval_minutes"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              >
+                <option value="5">Mỗi 5 phút</option>
+                <option value="10">Mỗi 10 phút</option>
+                <option value="15">Mỗi 15 phút</option>
+                <option value="30">Mỗi 30 phút</option>
+                <option value="60">Mỗi 60 phút</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Group & Keyword Selector -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+            <!-- Select Groups -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-semibold text-slate-300">Nhóm Facebook quét trong lịch này (<span x-text="newSchedule.group_ids.length + '/' + groups.length"></span>)</label>
+                <div class="flex gap-2 text-xs">
+                  <button type="button" @click="newSchedule.group_ids = groups.map(g => g.id)" class="text-blue-400 hover:underline">Tất cả</button>
+                  <span class="text-slate-600">|</span>
+                  <button type="button" @click="newSchedule.group_ids = []" class="text-slate-500 hover:underline">Bỏ chọn</button>
+                </div>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-40 overflow-y-auto space-y-1 text-xs">
+                <template x-for="g in groups" :key="g.id">
+                  <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-900 cursor-pointer">
+                    <input type="checkbox" :value="g.id" x-model="newSchedule.group_ids" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0" />
+                    <span class="truncate text-slate-200" x-text="g.name"></span>
+                    <span class="text-[10px] text-purple-400 ml-auto" x-text="'[' + (g.topic_name || 'Chưa phân loại') + ']'"></span>
+                  </label>
+                </template>
+              </div>
+            </div>
+
+            <!-- Select Keywords -->
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-xs font-semibold text-slate-300">Từ khóa lọc áp dụng (<span x-text="newSchedule.keyword_ids.length + '/' + keywords.length"></span>)</label>
+                <div class="flex gap-2 text-xs">
+                  <button type="button" @click="newSchedule.keyword_ids = keywords.map(k => k.id)" class="text-blue-400 hover:underline">Tất cả</button>
+                  <span class="text-slate-600">|</span>
+                  <button type="button" @click="newSchedule.keyword_ids = []" class="text-slate-500 hover:underline">Bỏ chọn</button>
+                </div>
+              </div>
+              <div class="bg-slate-950 border border-slate-800 rounded-lg p-2.5 max-h-40 overflow-y-auto space-y-1 text-xs">
+                <template x-for="k in keywords" :key="k.id">
+                  <label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-900 cursor-pointer">
+                    <input type="checkbox" :value="k.id" x-model="newSchedule.keyword_ids" class="rounded bg-slate-900 border-slate-700 text-purple-600 focus:ring-0" />
+                    <span class="truncate text-slate-200" x-text="'#' + k.text"></span>
+                  </label>
+                </template>
+                <div x-show="keywords.length === 0" class="text-slate-600 italic py-2 text-center">Chưa có từ khóa nào (Quét 100% bài).</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              @click="showAddScheduleModal = false"
+              class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
+            >
+              Hủy
+            </button>
+            <button
+              type="submit"
+              class="px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white shadow-md shadow-blue-600/20 transition-colors"
+            >
+              Lưu lịch quét
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Schedules List Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-200">
+            Danh sách Lịch Quét & Khung Giờ (<span x-text="schedules.length"></span>)
+          </h3>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Tên lịch / Ca quét</th>
+                <th class="px-5 py-3 text-left">Khung giờ chạy</th>
+                <th class="px-5 py-3 text-left">Chu kỳ</th>
+                <th class="px-5 py-3 text-left">Tài khoản cào</th>
+                <th class="px-5 py-3 text-center">Nhóm & Từ khóa</th>
+                <th class="px-5 py-3 text-center">Trạng thái</th>
+                <th class="px-5 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="s in schedules" :key="s.id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3">
+                    <p class="font-bold text-slate-200" x-text="s.name"></p>
+                    <p class="text-[11px] text-slate-500" x-text="s.last_run_at ? 'Chạy lần cuối: ' + new Date(s.last_run_at).toLocaleTimeString('vi-VN') : 'Chưa chạy lần nào'"></p>
+                  </td>
+                  <td class="px-5 py-3">
+                    <span class="px-2.5 py-1 rounded bg-slate-950 border border-slate-800 text-blue-400 font-mono text-xs font-semibold" x-text="'⏰ ' + s.start_time + ' - ' + s.end_time"></span>
+                  </td>
+                  <td class="px-5 py-3 text-xs text-slate-300 font-mono" x-text="s.interval_minutes + ' phút/lần'"></td>
+                  <td class="px-5 py-3 text-xs text-slate-300">
+                    <span x-text="getAccountName(s.account_id)"></span>
+                  </td>
+                  <td class="px-5 py-3 text-center text-xs text-slate-400">
+                    <span class="text-blue-300 font-semibold" x-text="JSON.parse(s.group_ids_json || '[]').length + ' nhóm'"></span>
+                    <span class="text-slate-600">•</span>
+                    <span class="text-purple-300 font-semibold" x-text="JSON.parse(s.keyword_ids_json || '[]').length + ' từ khóa'"></span>
+                  </td>
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <button
+                      @click="toggleSchedule(s.id)"
+                      class="px-2.5 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer"
+                      :class="s.is_active ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' : 'bg-slate-800 text-slate-500'"
+                      x-text="s.is_active ? '🟢 Đang bật' : '⚪ Đã tắt'"
+                    ></button>
+                  </td>
+                  <td class="px-5 py-3 text-right whitespace-nowrap space-x-2">
+                    <button
+                      @click="runScheduleNow(s.id)"
+                      class="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-blue-400 hover:text-blue-300 text-xs font-semibold"
+                      title="Chạy thử ngay bây giờ"
+                    >
+                      🚀 Chạy ngay
+                    </button>
+                    <button
+                      @click="deleteSchedule(s.id, s.name)"
+                      class="text-rose-400 hover:text-rose-300 text-xs font-semibold px-2 py-1"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="schedules.length === 0">
+                <td colspan="7" class="px-5 py-8 text-center text-slate-600">
+                  Chưa có lịch quét nào. Bấm "➕ Tạo Lịch Quét Mới" ở trên để thiết lập khung giờ và phân chia tài khoản!
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <div x-show="currentTab === 'accounts'" class="space-y-6">
+
+      <!-- Add Account Form -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            👤 Thêm Tài khoản Facebook vào Pool
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Thêm nhiều tài khoản để tự động xoay vòng cào dữ liệu, chia tải và tránh bị Facebook giới hạn tần suất quét!
+          </p>
+        </div>
+
+        <form @submit.prevent="addAccount()" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Tên gợi nhớ tài khoản</label>
+            <input
+              type="text"
+              x-model="newAccount.name"
+              required
+              placeholder="VD: Nick phụ 1 (Via quét bài), Nick phụ 2..."
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Dán Cookie tài khoản (Header string c_user=...; xs=... hoặc JSON):</label>
+            <textarea
+              x-model="newAccount.cookies"
+              required
+              rows="3"
+              placeholder="c_user=1000...; xs=...; datr=...;"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs font-mono text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+            ></textarea>
+          </div>
+
+          <div class="flex justify-end">
+            <button
+              type="submit"
+              class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+            >
+              Thêm tài khoản
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Accounts Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-200">Danh sách tài khoản trong Pool (<span x-text="accounts.length"></span>)</h3>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Tên tài khoản</th>
+                <th class="px-5 py-3 text-left">Facebook UID (c_user)</th>
+                <th class="px-5 py-3 text-center">Trạng thái</th>
+                <th class="px-5 py-3 text-left">Sử dụng lần cuối</th>
+                <th class="px-5 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="acc in accounts" :key="acc.id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3 font-semibold text-slate-200" x-text="acc.name"></td>
+                  <td class="px-5 py-3 text-slate-400 font-mono text-xs" x-text="acc.c_user || '—'"></td>
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <button
+                      @click="toggleAccount(acc.id)"
+                      class="px-2.5 py-1 rounded-full text-xs font-semibold cursor-pointer"
+                      :class="acc.is_active ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' : 'bg-slate-800 text-slate-500'"
+                      x-text="acc.is_active ? '🟢 Đang dùng' : '⚪ Đã tắt'"
+                    ></button>
+                  </td>
+                  <td class="px-5 py-3 text-slate-500 text-xs" x-text="acc.last_used_at ? new Date(acc.last_used_at).toLocaleString('vi-VN') : 'Chưa dùng'"></td>
+                  <td class="px-5 py-3 text-right whitespace-nowrap space-x-2">
+                    <button
+                      @click="testAccount(acc.id)"
+                      class="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2 py-1 bg-slate-800 rounded"
+                    >
+                      Test Cookie
+                    </button>
+                    <button
+                      @click="deleteAccount(acc.id, acc.name)"
+                      class="text-rose-400 hover:text-rose-300 text-xs font-semibold px-2 py-1"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="accounts.length === 0">
+                <td colspan="5" class="px-5 py-8 text-center text-slate-600">Chưa có tài khoản nào trong pool. Hãy thêm tài khoản ở trên!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 4: TARGETS (GROUPS & KEYWORDS)                           -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'targets'" class="space-y-6">
+
+      <!-- Add Group Form -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h2 class="text-sm font-bold text-slate-200 mb-3">➕ Thêm Nhóm Facebook mục tiêu thủ công</h2>
+
+        <form @submit.prevent="addGroup()" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Tên nhóm gợi nhớ</label>
+            <input
+              type="text"
+              x-model="newGroup.name"
+              required
+              placeholder="VD: Hội Dùng Máy Rửa Bát"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+            />
+          </div>
+
+          <div class="md:col-span-2 flex gap-3 items-end">
+            <div class="flex-1">
+              <label class="block text-xs text-slate-400 mb-1">URL hoặc ID nhóm Facebook</label>
+              <input
+                type="text"
+                x-model="newGroup.fb_url"
+                required
+                placeholder="https://www.facebook.com/groups/123456789... hoặc 123456789"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <button
+              type="submit"
+              class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors flex-shrink-0"
+            >
+              Thêm nhóm
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Groups Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
+          <h3 class="text-sm font-bold text-slate-300">Danh sách nhóm đang theo dõi (<span x-text="groups.length"></span>)</h3>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Tên nhóm</th>
+                <th class="px-5 py-3 text-left">Clean ID / URL</th>
+                <th class="px-5 py-3 text-center">Trạng thái</th>
+                <th class="px-5 py-3 text-left">Quét lần cuối</th>
+                <th class="px-5 py-3 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="g in groups" :key="g.id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3 font-semibold text-slate-200" x-text="g.name"></td>
+                  <td class="px-5 py-3 text-slate-400 font-mono text-xs">
+                    <a :href="g.fb_url" target="_blank" class="text-blue-400 hover:underline" x-text="g.clean_group_id || g.fb_url"></a>
+                  </td>
+                  <td class="px-5 py-3 text-center">
+                    <button
+                      @click="toggleGroup(g.id)"
+                      class="px-2.5 py-1 rounded-full text-xs font-medium cursor-pointer"
+                      :class="g.is_active ? 'bg-emerald-950 text-emerald-300 border border-emerald-900' : 'bg-slate-800 text-slate-500'"
+                      x-text="g.is_active ? '🟢 Bật' : '⚪ Tạm dừng'"
+                    ></button>
+                  </td>
+                  <td class="px-5 py-3 text-slate-500 text-xs" x-text="g.last_scraped_at ? new Date(g.last_scraped_at).toLocaleString('vi-VN') : 'Chưa quét'"></td>
+                  <td class="px-5 py-3 text-right whitespace-nowrap space-x-2">
+                    <button @click="scanSingleGroup(g.id)" class="text-blue-400 hover:text-blue-300 text-xs font-semibold px-2 py-1 bg-slate-800 rounded">Quét nhóm này</button>
+                    <button @click="deleteGroup(g.id, g.name)" class="text-rose-400 hover:text-rose-300 text-xs font-semibold px-2 py-1">Xóa</button>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="groups.length === 0">
+                <td colspan="5" class="px-5 py-8 text-center text-slate-600">Chưa có nhóm nào. Hãy thêm nhóm ở trên hoặc dùng tính năng Tìm kiếm Nhóm!</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Keywords Management -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 class="text-sm font-bold text-slate-200">🔑 Từ khóa lọc nội dung (Keywords)</h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Hỗ trợ nhập nhiều từ khóa phân cách bằng dấu phẩy. <strong>Nếu để trống:</strong> Sẽ quét toàn bộ bài mới trong nhóm (chuẩn fbn).
+          </p>
+        </div>
+
+        <form @submit.prevent="addKeyword()" class="flex gap-3">
+          <input
+            type="text"
+            x-model="newKeywordText"
+            placeholder="Nhập từ khóa (VD: máy rửa bát, bosch, sms6zci16e, thanh lý...)"
+            class="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500"
+          />
+          <button type="submit" class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white">
+            Thêm từ khóa
+          </button>
+        </form>
+
+        <!-- Keywords Tags -->
+        <div class="flex flex-wrap gap-2 pt-2">
+          <template x-for="kw in keywords" :key="kw.id">
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium border transition-colors"
+              :class="kw.is_active ? 'bg-blue-950/80 border-blue-800 text-blue-200' : 'bg-slate-950 border-slate-800 text-slate-500'">
+              <span @click="toggleKeyword(kw.id)" class="cursor-pointer" x-text="kw.text"></span>
+              <button @click="deleteKeyword(kw.id, kw.text)" class="text-slate-500 hover:text-rose-400 ml-1">✕</button>
+            </span>
+          </template>
+          <span x-show="keywords.length === 0" class="text-xs text-slate-500 italic">
+            Chưa có từ khóa nào (Đang ở chế độ theo dõi 100% bài viết mới của nhóm).
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 5: SETTINGS & TELEGRAM                                   -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'settings'" class="space-y-6">
+
+      <!-- Telegram Setup -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            📲 Cấu hình Thông báo Telegram
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">
+            Nhận cảnh báo bài viết mới tức thì với đầy đủ nội dung tóm tắt và nút bấm mở bài viết.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Telegram Bot Token</label>
+            <input
+              type="text"
+              x-model="formConfig.telegram_bot_token"
+              placeholder="VD: 123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500 font-mono"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Telegram Chat ID (hoặc Channel ID)</label>
+            <input
+              type="text"
+              x-model="formConfig.telegram_chat_id"
+              placeholder="VD: 123456789 hoặc -1001234567890"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder-slate-700 focus:outline-none focus:border-blue-500 font-mono"
+            />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button
+            @click="testTelegram()"
+            :disabled="isTestingTelegram"
+            class="px-4 py-2 rounded-lg text-sm font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
+          >
+            <span x-show="!isTestingTelegram">📨 Gửi tin nhắn kiểm tra</span>
+            <span x-show="isTestingTelegram">Đang gửi...</span>
+          </button>
+
+          <button
+            @click="saveSettings()"
+            class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+          >
+            Lưu Telegram
+          </button>
+        </div>
+      </div>
+
+      <!-- Scan Timing Setup -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 space-y-4">
+        <h2 class="text-base font-bold text-white">⏱️ Chu kỳ & Giới hạn cào</h2>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Chu kỳ quét tự động (phút)</label>
+            <select
+              x-model.number="formConfig.scrape_interval_minutes"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              <option value="5">5 phút / lần</option>
+              <option value="10">10 phút / lần (Khuyên dùng)</option>
+              <option value="15">15 phút / lần</option>
+              <option value="30">30 phút / lần</option>
+              <option value="60">60 phút / lần</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Số bài đọc tối đa mỗi nhóm/lần</label>
+            <select
+              x-model.number="formConfig.max_posts_per_scan"
+              class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+            >
+              <option value="10">10 bài viết mới nhất</option>
+              <option value="20">20 bài viết mới nhất (Chuẩn fbn)</option>
+              <option value="40">40 bài viết</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button
+            @click="saveSettings()"
+            class="px-5 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+          >
+            Lưu tất cả cài đặt
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 6: SEEN POSTS                                            -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'posts'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">📋 Cơ sở dữ liệu bài viết đã thấy (<span x-text="seenPosts.length"></span>)</h2>
+          <p class="text-xs text-slate-400">Danh sách bài viết đã quét và chống trùng lặp</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            type="text"
+            x-model="postSearch"
+            placeholder="Tìm kiếm bài viết..."
+            class="bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 w-64"
+          />
+          <button
+            @click="clearAllSeenPosts()"
+            :disabled="seenPosts.length === 0"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-950 text-rose-300 border border-rose-900 hover:bg-rose-900 disabled:opacity-40 transition-colors"
+            title="Xóa danh sách bài đã lưu để quét lại từ đầu"
+          >
+            🗑️ Xóa bài đã lưu
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Nhóm</th>
+                <th class="px-5 py-3 text-left">Tác giả (Bài trong nhóm)</th>
+                <th class="px-5 py-3 text-left">Nội dung</th>
+                <th class="px-5 py-3 text-left">Khớp từ khóa</th>
+                <th class="px-5 py-3 text-center">Telegram</th>
+                <th class="px-5 py-3 text-right">Link bài viết</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="p in filteredPosts" :key="p.id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3 font-medium text-slate-200 whitespace-nowrap" x-text="p.group_name"></td>
+                  <td class="px-5 py-3 text-xs whitespace-nowrap">
+                    <template x-if="p.author_url && p.author_name && p.author_name !== 'Ẩn danh'">
+                      <a
+                        :href="p.author_url"
+                        target="_blank"
+                        title="Mở tất cả bài viết của tác giả này trong nhóm"
+                        class="text-blue-400 hover:text-blue-300 hover:underline font-medium inline-flex items-center gap-1"
+                      >
+                        <span x-text="p.author_name"></span>
+                        <span class="text-[10px] text-slate-500">👤↗</span>
+                      </a>
+                    </template>
+                    <template x-if="!p.author_url || !p.author_name || p.author_name === 'Ẩn danh'">
+                      <span class="text-slate-400" x-text="p.author_name || 'Ẩn danh'"></span>
+                    </template>
+                  </td>
+                  <td class="px-5 py-3 text-slate-300 max-w-md">
+                    <p class="line-clamp-2 text-xs" x-text="p.content"></p>
+                  </td>
+                  <td class="px-5 py-3">
+                    <span x-show="p.matched_keywords" class="px-2 py-0.5 rounded text-xs bg-blue-950 text-blue-300 border border-blue-900" x-text="'#' + p.matched_keywords"></span>
+                    <span x-show="!p.matched_keywords" class="text-slate-600 text-xs">—</span>
+                  </td>
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <span x-show="p.is_notified" class="px-2 py-0.5 rounded-full text-[11px] bg-emerald-950 text-emerald-300 border border-emerald-900">✓ Đã gửi</span>
+                    <span x-show="!p.is_notified" class="px-2 py-0.5 rounded-full text-[11px] bg-slate-800 text-slate-500">Chưa</span>
+                  </td>
+                  <td class="px-5 py-3 text-right whitespace-nowrap">
+                    <a
+                      :href="p.post_url"
+                      target="_blank"
+                      class="px-2.5 py-1 rounded bg-blue-950 hover:bg-blue-900 text-blue-300 hover:text-white border border-blue-900 text-xs font-semibold inline-flex items-center gap-1 transition-colors"
+                      title="Mở bài viết trực tiếp trên Facebook"
+                    >
+                      <span>Xem bài viết</span>
+                      <span>↗</span>
+                    </a>
+                  </td>
+                </tr>
+              </template>
+              <tr x-show="filteredPosts.length === 0">
+                <td colspan="6" class="px-5 py-8 text-center text-slate-600">Không tìm thấy bài viết nào.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB 7: LOGS                                                  -->
+    <!-- ============================================================ -->
+    <div x-show="currentTab === 'logs'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-base font-bold text-white">📜 Lịch sử các lần chạy cào dữ liệu</h2>
+        <button @click="loadData()" class="text-xs px-3 py-1.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300">Làm mới</button>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-slate-800 text-xs text-slate-400 uppercase">
+                <th class="px-5 py-3 text-left">Thời gian</th>
+                <th class="px-5 py-3 text-left">Loại chạy</th>
+                <th class="px-5 py-3 text-left">Tài khoản</th>
+                <th class="px-5 py-3 text-center">Trạng thái</th>
+                <th class="px-5 py-3 text-center">Bài tìm thấy</th>
+                <th class="px-5 py-3 text-center">Bài mới</th>
+                <th class="px-5 py-3 text-center">Đã gửi</th>
+                <th class="px-5 py-3 text-left">Chi tiết</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <template x-for="lg in logs" :key="lg.id">
+                <tr class="hover:bg-slate-800/40">
+                  <td class="px-5 py-3 text-slate-400 text-xs whitespace-nowrap font-mono" x-text="new Date(lg.started_at).toLocaleString('vi-VN')"></td>
+                  <td class="px-5 py-3 font-semibold text-xs" :class="lg.run_type === 'check' ? 'text-blue-400' : 'text-purple-400'" x-text="lg.run_type === 'check' ? '⚡ Check (Thủ công)' : '🔄 Monitor (Tự động)'"></td>
+                  <td class="px-5 py-3 text-slate-300 text-xs" x-text="lg.account_used || 'Mặc định'"></td>
+                  <td class="px-5 py-3 text-center whitespace-nowrap">
+                    <span class="px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                      :class="{
+                        'bg-emerald-950 text-emerald-300 border border-emerald-900': lg.status === 'success',
+                        'bg-rose-950 text-rose-300 border border-rose-900': lg.status === 'error',
+                        'bg-amber-950 text-amber-300 border border-amber-900': lg.status === 'warning',
+                        'bg-slate-800 text-slate-400': lg.status === 'running'
+                      }"
+                      x-text="lg.status"
+                    ></span>
+                  </td>
+                  <td class="px-5 py-3 text-center font-mono text-xs text-slate-300" x-text="lg.posts_found"></td>
+                  <td class="px-5 py-3 text-center font-mono text-xs text-blue-400 font-bold" x-text="lg.posts_new"></td>
+                  <td class="px-5 py-3 text-center font-mono text-xs text-emerald-400 font-bold" x-text="lg.posts_sent"></td>
+                  <td class="px-5 py-3 text-xs text-slate-400 max-w-sm truncate" x-text="lg.message || '—'"></td>
+                </tr>
+              </template>
+              <tr x-show="logs.length === 0">
+                <td colspan="8" class="px-5 py-8 text-center text-slate-600">Chưa có lịch sử chạy nào.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Application Logic (Alpine.js) ─────────────────────────── -->
+  <script>
+    function app() {
+      return {
+        currentTab: 'dashboard',
+        config: {},
+        formConfig: {},
+        doctor: {},
+        accounts: [],
+        groups: [],
+        keywords: [],
+        recentPosts: [],
+        seenPosts: [],
+        logs: [],
+        stats: { seen_posts_total: 0 },
+        liveLogs: [],
+
+        // Topics and repository
+        topics: [],
+        schedules: [],
+        selectedTopicFilter: 'all',
+        repoSearch: '',
+        showAddTopicModal: false,
+        newTopic: { name: '', color: 'blue' },
+
+        // Schedule state
+        showAddScheduleModal: false,
+        newSchedule: {
+          name: '',
+          account_id: null,
+          group_ids: [],
+          keyword_ids: [],
+          interval_minutes: 10,
+          start_time: '08:00',
+          end_time: '18:00'
+        },
+
+        // Selective scan states
+        selectedGroupIds: [],
+        selectedKeywordIds: [],
+        selectedAccountId: null,
+
+        // Discovery state
+        discoveryForm: {
+          keyword: '',
+          min_members: 0,
+          privacy: 'all',
+          max_results: 15
+        },
+        discoveredResults: [],
+        isDiscovering: false,
+        joinedGroupIds: JSON.parse(localStorage.getItem('fbn_joined_group_ids') || '[]'),
+
+        isGroupJoined(cleanId) {
+          if (this.joinedGroupIds.includes(cleanId)) return true;
+          return this.groups.some(g => (g.clean_group_id === cleanId || (g.fb_url && g.fb_url.includes(cleanId))) && g.is_joined);
+        },
+
+        markGroupJoined(cleanId) {
+          if (!this.joinedGroupIds.includes(cleanId)) {
+            this.joinedGroupIds.push(cleanId);
+            localStorage.setItem('fbn_joined_group_ids', JSON.stringify(this.joinedGroupIds));
+          }
+        },
+
+        clearJoinedCache() {
+          this.joinedGroupIds = [];
+          localStorage.removeItem('fbn_joined_group_ids');
+          this.showToast('Đã đặt lại trạng thái đã tham gia', 'info');
+        },
+
+        isGroupMonitored(cleanId) {
+          return this.groups.some(g => g.clean_group_id === cleanId || (g.fb_url && g.fb_url.includes(cleanId)));
+        },
+
+        async clearAllSeenPosts() {
+          if (!confirm('Bạn có chắc muốn xóa toàn bộ bài viết đã lưu? Sau khi xóa, bạn có thể quét lại để lấy bài viết với link mới nhất.')) return;
+          try {
+            const res = await fetch('/api/posts/clear', { method: 'POST' });
+            if (res.ok) {
+              this.showToast('Đã xóa toàn bộ bài viết đã lưu!', 'success');
+              await this.loadData();
+            } else {
+              this.showToast('Xóa thất bại', 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối khi xóa bài viết', 'error');
+          }
+        },
+
+        // Account form
+        newAccount: { name: '', cookies: '' },
+
+        // Async indicators
+        isRunningCheck: false,
+        isRunningDoctor: false,
+        isTestingTelegram: false,
+        newGroup: { name: '', fb_url: '' },
+        newKeywordText: '',
+        postSearch: '',
+        toast: { show: false, message: '', type: 'info', timer: null },
+
+        showToast(message, type = 'info') {
+          this.toast.message = message;
+          this.toast.type = type;
+          this.toast.show = true;
+          if (this.toast.timer) clearTimeout(this.toast.timer);
+          this.toast.timer = setTimeout(() => { this.toast.show = false; }, 4000);
+        },
+
+        async initApp() {
+          await this.loadData();
+          this.selectAllGroups(true);
+          this.selectAllKeywords(true);
+        },
+
+        async loadData() {
+          try {
+            const res = await fetch('/api/state');
+            if (res.ok) {
+              const data = await res.json();
+              this.config = data.config || {};
+              this.formConfig = { ...this.config };
+              this.accounts = data.accounts || [];
+              this.groups = data.groups || [];
+              this.keywords = data.keywords || [];
+              this.recentPosts = data.recent_posts || [];
+              this.seenPosts = data.seen_posts || [];
+              this.logs = data.logs || [];
+              this.topics = data.topics || [];
+              this.schedules = data.schedules || [];
+              this.stats.seen_posts_total = this.seenPosts.length;
+            }
+          } catch (err) {
+            console.error('Failed to load app state:', err);
+          }
+        },
+
+        selectAllGroups(val) {
+          this.selectedGroupIds = val ? this.groups.map(g => g.id) : [];
+        },
+
+        selectAllKeywords(val) {
+          this.selectedKeywordIds = val ? this.keywords.map(k => k.id) : [];
+        },
+
+        get filteredPosts() {
+          if (!this.postSearch.trim()) return this.seenPosts;
+          const q = this.postSearch.toLowerCase();
+          return this.seenPosts.filter(p =>
+            (p.content && p.content.toLowerCase().includes(q)) ||
+            (p.author_name && p.author_name.toLowerCase().includes(q)) ||
+            (p.group_name && p.group_name.toLowerCase().includes(q)) ||
+            (p.matched_keywords && p.matched_keywords.toLowerCase().includes(q))
+          );
+        },
+
+        get filteredRepositoryGroups() {
+          let list = this.groups;
+          if (this.selectedTopicFilter !== 'all') {
+            if (this.selectedTopicFilter === 'Chưa phân loại') {
+              list = list.filter(g => !g.topic_name || g.topic_name === 'Chưa phân loại');
+            } else {
+              list = list.filter(g => g.topic_name === this.selectedTopicFilter);
+            }
+          }
+          if (this.repoSearch.trim()) {
+            const q = this.repoSearch.toLowerCase();
+            list = list.filter(g =>
+              (g.name && g.name.toLowerCase().includes(q)) ||
+              (g.clean_group_id && g.clean_group_id.toLowerCase().includes(q)) ||
+              (g.topic_name && g.topic_name.toLowerCase().includes(q))
+            );
+          }
+          return list;
+        },
+
+        getAccountName(accountId) {
+          if (!accountId) return 'Tự động xoay vòng';
+          const acc = this.accounts.find(a => a.id === accountId);
+          return acc ? acc.name : `Tài khoản #${accountId}`;
+        },
+
+        async triggerCheck(dryRun = false) {
+          if (this.selectedGroupIds.length === 0) {
+            this.showToast('Vui lòng chọn ít nhất 1 nhóm để quét', 'warning');
+            return;
+          }
+
+          this.isRunningCheck = true;
+          this.liveLogs = [];
+          this.liveLogs.push(`[${new Date().toLocaleTimeString()}] Kích hoạt quét có chọn lọc (${this.selectedGroupIds.length} nhóm)...`);
+
+          try {
+            const res = await fetch('/api/check', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                dry_run: dryRun,
+                group_ids: this.selectedGroupIds,
+                keyword_ids: this.selectedKeywordIds.length > 0 ? this.selectedKeywordIds : null,
+                account_id: this.selectedAccountId
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.logs) {
+                this.liveLogs.push(...data.logs);
+              }
+              this.showToast(`Quét hoàn tất: Tìm thấy ${data.posts_found} bài, ${data.posts_new} bài mới, gửi ${data.posts_sent} cảnh báo!`, 'success');
+              await this.loadData();
+            } else {
+              this.showToast('Quét thất bại', 'error');
+            }
+          } catch (err) {
+            this.showToast('Lỗi kết nối máy chủ khi quét', 'error');
+          } finally {
+            this.isRunningCheck = false;
+          }
+        },
+
+        async scanSingleGroup(groupId) {
+          this.selectedGroupIds = [groupId];
+          this.currentTab = 'dashboard';
+          await this.triggerCheck(false);
+        },
+
+        async runDiscovery() {
+          if (!this.discoveryForm.keyword.trim()) return;
+          this.isDiscovering = true;
+          this.discoveredResults = [];
+          this.showToast('Đang tìm kiếm nhóm trên Facebook...', 'info');
+
+          try {
+            const res = await fetch('/api/groups/discover', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.discoveryForm)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.discoveredResults = data.groups || [];
+              if (this.discoveredResults.length > 0) {
+                this.showToast(`Tìm thấy ${this.discoveredResults.length} nhóm phù hợp!`, 'success');
+              } else {
+                this.showToast('Không tìm thấy nhóm nào khớp với điều kiện lọc.', 'warning');
+              }
+            } else {
+              this.showToast('Lỗi khi tìm kiếm nhóm', 'error');
+            }
+          } catch (e) {
+            this.showToast('Lỗi kết nối máy chủ', 'error');
+          } finally {
+            this.isDiscovering = false;
+          }
+        },
+
+        async addDiscoveredToTargets(item) {
+          try {
+            const res = await fetch('/api/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: item.name,
+                fb_url: item.fb_url,
+                member_count: item.member_count,
+                privacy: item.privacy,
+                topic_name: item.selectedTopic || 'Chưa phân loại',
+                post_permission: item.post_permission || 'unknown',
+                post_permission_text: item.post_permission_text || ''
+              })
+            });
+            if (res.ok) {
+              this.showToast(`Đã thêm "${item.name}" vào danh sách theo dõi!`, 'success');
+              await this.loadData();
+              this.selectAllGroups(true);
+            }
+          } catch {
+            this.showToast('Lỗi khi thêm nhóm', 'error');
+          }
+        },
+
+        async addAccount() {
+          try {
+            const res = await fetch('/api/accounts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newAccount)
+            });
+            if (res.ok) {
+              this.showToast('Đã thêm tài khoản mới vào pool!', 'success');
+              this.newAccount = { name: '', cookies: '' };
+              await this.loadData();
+            } else {
+              const d = await res.json().catch(() => ({}));
+              this.showToast(d.detail || 'Lỗi thêm tài khoản', 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          }
+        },
+
+        async toggleAccount(id) {
+          try {
+            await fetch(`/api/accounts/${id}/toggle`, { method: 'POST' });
+            await this.loadData();
+          } catch {}
+        },
+
+        async testAccount(id) {
+          this.showToast('Đang kiểm tra cookie tài khoản...', 'info');
+          try {
+            const res = await fetch(`/api/accounts/${id}/test`, { method: 'POST' });
+            const data = await res.json();
+            if (data.cookie_ok) {
+              this.showToast(`Tài khoản hoạt động tốt! UID: ${data.c_user}`, 'success');
+            } else {
+              this.showToast(data.cookie_msg || 'Cookie không hợp lệ hoặc hết hạn', 'error');
+            }
+            await this.loadData();
+          } catch {
+            this.showToast('Lỗi kết nối kiểm tra', 'error');
+          }
+        },
+
+        async deleteAccount(id, name) {
+          if (!confirm(`Bạn có chắc muốn xóa tài khoản "${name}"?`)) return;
+          try {
+            await fetch(`/api/accounts/${id}`, { method: 'DELETE' });
+            this.showToast(`Đã xóa tài khoản "${name}"`, 'success');
+            await this.loadData();
+          } catch {}
+        },
+
+        async toggleMonitor() {
+          try {
+            const res = await fetch('/api/monitor/toggle', { method: 'POST' });
+            if (res.ok) {
+              const data = await res.json();
+              this.config.monitor_active = data.monitor_active;
+              this.showToast(data.monitor_active ? 'Đã BẬT chế độ giám sát tự động!' : 'Đã TẮT chế độ giám sát tự động!', 'info');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          }
+        },
+
+        async saveSettings() {
+          try {
+            const res = await fetch('/api/settings', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.formConfig)
+            });
+            if (res.ok) {
+              this.showToast('Lưu cài đặt thành công!', 'success');
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          }
+        },
+
+        async testTelegram() {
+          this.isTestingTelegram = true;
+          try {
+            const res = await fetch('/api/telegram/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                bot_token: this.formConfig.telegram_bot_token,
+                chat_id: this.formConfig.telegram_chat_id
+              })
+            });
+            const data = await res.json();
+            if (data.success) {
+              this.showToast(data.message, 'success');
+            } else {
+              this.showToast(data.message, 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          } finally {
+            this.isTestingTelegram = false;
+          }
+        },
+
+        async addGroup() {
+          try {
+            const res = await fetch('/api/groups', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newGroup)
+            });
+            if (res.ok) {
+              this.showToast('Đã thêm nhóm thành công!', 'success');
+              this.newGroup = { name: '', fb_url: '' };
+              await this.loadData();
+              this.selectAllGroups(true);
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          }
+        },
+
+        async toggleGroup(id) {
+          try {
+            await fetch(`/api/groups/${id}/toggle`, { method: 'POST' });
+            await this.loadData();
+          } catch {}
+        },
+
+        async deleteGroup(id, name) {
+          if (!confirm(`Bạn có chắc muốn xóa nhóm "${name}"?`)) return;
+          try {
+            await fetch(`/api/groups/${id}`, { method: 'DELETE' });
+            this.showToast(`Đã xóa nhóm "${name}"`, 'success');
+            await this.loadData();
+          } catch {}
+        },
+
+        async addKeyword() {
+          if (!this.newKeywordText.trim()) return;
+          try {
+            const res = await fetch('/api/keywords', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: this.newKeywordText.trim() })
+            });
+            if (res.ok) {
+              this.showToast('Đã thêm từ khóa!', 'success');
+              this.newKeywordText = '';
+              await this.loadData();
+              this.selectAllKeywords(true);
+            }
+          } catch {}
+        },
+
+        async toggleKeyword(id) {
+          try {
+            await fetch(`/api/keywords/${id}/toggle`, { method: 'POST' });
+            await this.loadData();
+          } catch {}
+        },
+
+        async deleteKeyword(id, text) {
+          try {
+            await fetch(`/api/keywords/${id}`, { method: 'DELETE' });
+            this.showToast(`Đã xóa từ khóa "${text}"`, 'success');
+            await this.loadData();
+          } catch {}
+        },
+
+        // ── Topic Management ───────────────────────────────────────────
+        async createTopic() {
+          if (!this.newTopic.name.trim()) return;
+          try {
+            const res = await fetch('/api/topics', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newTopic)
+            });
+            if (res.ok) {
+              this.showToast(`Đã thêm chủ đề "${this.newTopic.name}"!`, 'success');
+              this.newTopic.name = '';
+              this.showAddTopicModal = false;
+              await this.loadData();
+            } else {
+              this.showToast('Lỗi khi thêm chủ đề', 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối máy chủ', 'error');
+          }
+        },
+
+        async deleteTopic(id, name) {
+          if (!confirm(`Bạn có chắc muốn xóa chủ đề "${name}"? Các nhóm thuộc chủ đề này sẽ chuyển về "Chưa phân loại".`)) return;
+          try {
+            const res = await fetch(`/api/topics/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+              this.showToast(`Đã xóa chủ đề "${name}"`, 'success');
+              if (this.selectedTopicFilter === name) this.selectedTopicFilter = 'all';
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi khi xóa chủ đề', 'error');
+          }
+        },
+
+        async updateGroupTopic(groupId, topicName) {
+          try {
+            const res = await fetch(`/api/groups/${groupId}/topic`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ topic_name: topicName })
+            });
+            if (res.ok) {
+              this.showToast('Đã cập nhật chủ đề nhóm!', 'success');
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi khi cập nhật chủ đề', 'error');
+          }
+        },
+
+        async toggleGroupJoined(groupId) {
+          try {
+            const res = await fetch(`/api/groups/${groupId}/joined`, { method: 'POST' });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(data.is_joined ? 'Đã đánh dấu đã tham gia nhóm!' : 'Đã chuyển thành chưa tham gia', 'info');
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi khi cập nhật trạng thái tham gia', 'error');
+          }
+        },
+
+        async checkGroupPermission(groupId) {
+          this.showToast('Đang kiểm tra quyền đăng bài & bình luận của nhóm...', 'info');
+          try {
+            const res = await fetch(`/api/groups/${groupId}/check-permission`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok && data.status === 'success') {
+              this.showToast(`Kết quả: ${data.post_permission_text}`, 'success');
+              await this.loadData();
+            } else {
+              this.showToast(data.message || 'Không thể kiểm tra quyền nhóm lúc này', 'warning');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối khi kiểm tra nhóm', 'error');
+          }
+        },
+
+        // ── Schedule Management ────────────────────────────────────────
+        async createSchedule() {
+          if (!this.newSchedule.name.trim()) {
+            this.showToast('Vui lòng nhập tên lịch quét', 'warning');
+            return;
+          }
+          if (this.newSchedule.group_ids.length === 0) {
+            this.showToast('Vui lòng chọn ít nhất 1 nhóm cho lịch này', 'warning');
+            return;
+          }
+          try {
+            const res = await fetch('/api/schedules', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.newSchedule)
+            });
+            if (res.ok) {
+              this.showToast(`Đã tạo lịch quét "${this.newSchedule.name}" thành công!`, 'success');
+              this.showAddScheduleModal = false;
+              this.newSchedule = {
+                name: '',
+                account_id: null,
+                group_ids: [],
+                keyword_ids: [],
+                interval_minutes: 10,
+                start_time: '08:00',
+                end_time: '18:00'
+              };
+              await this.loadData();
+            } else {
+              this.showToast('Lỗi khi tạo lịch quét', 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối khi tạo lịch', 'error');
+          }
+        },
+
+        async toggleSchedule(id) {
+          try {
+            const res = await fetch(`/api/schedules/${id}/toggle`, { method: 'POST' });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(data.is_active ? 'Đã BẬT lịch quét!' : 'Đã TẮT lịch quét', 'info');
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi kết nối', 'error');
+          }
+        },
+
+        async runScheduleNow(id) {
+          this.showToast('Đang kích hoạt chạy lịch ngay lập tức...', 'info');
+          try {
+            const res = await fetch(`/api/schedules/${id}/run-now`, { method: 'POST' });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(`Lịch đã chạy xong: ${data.posts_found} bài tìm thấy, ${data.posts_new} bài mới!`, 'success');
+              await this.loadData();
+            } else {
+              this.showToast('Chạy lịch thất bại', 'error');
+            }
+          } catch {
+            this.showToast('Lỗi kết nối khi chạy lịch', 'error');
+          }
+        },
+
+        async deleteSchedule(id, name) {
+          if (!confirm(`Bạn có chắc muốn xóa lịch quét "${name}"?`)) return;
+          try {
+            const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+              this.showToast(`Đã xóa lịch quét "${name}"`, 'success');
+              await this.loadData();
+            }
+          } catch {
+            this.showToast('Lỗi khi xóa lịch', 'error');
+          }
+        }
+      };
+    }
+  </script>
+</body>
+</html>

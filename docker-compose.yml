@@ -1,0 +1,30 @@
+services:
+  fb-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fb-monitor
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
+      - DATA_DIR=/app/data
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+    volumes:
+      # Persistent storage for SQLite database (preserves accounts, groups, keywords, and history)
+      - ./data:/app/data
+    shm_size: '2gb' # Sufficient shared memory for headless Chromium
+
+  # Optional 1-click Cloudflare Tunnel to expose to the public web with free HTTPS
+  # Usage: docker compose --profile tunnel up -d
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: fb-monitor-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    profiles:
+      - tunnel
+    depends_on:
+      - fb-monitor

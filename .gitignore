@@ -1,0 +1,23 @@
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+
+# Sensitive environment variables
+.env
+
+# SQLite local databases (so production VPS starts with clean or mounted data)
+data/
+session/
+fb_monitor.db
+
+# Editor files
+.vscode/
+.idea/

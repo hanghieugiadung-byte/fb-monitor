@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Lịch sử Quét (Logs) — FB Monitor{% endblock %}
+{% block page_title %}📊 Lịch sử & Nhật ký Quét (Scrape Logs){% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- ── Bảng Logs ─────────────────────────────────────────── -->
+  <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+      <h2 class="text-sm font-semibold text-gray-300">
+        100 lần quét gần đây nhất
+      </h2>
+      <button
+        onclick="location.reload()"
+        class="text-xs px-3 py-1.5 rounded bg-gray-800 hover:bg-gray-700 text-gray-300 transition-colors"
+      >
+        🔄 Làm mới
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-gray-800 text-xs text-gray-500 uppercase tracking-wide">
+            <th class="px-5 py-3 text-left">Thời gian</th>
+            <th class="px-5 py-3 text-left">Nhóm Facebook</th>
+            <th class="px-5 py-3 text-center">Trạng thái</th>
+            <th class="px-5 py-3 text-center">Bài tìm thấy</th>
+            <th class="px-5 py-3 text-center">Bài đã gửi</th>
+            <th class="px-5 py-3 text-left">Chi tiết / Lỗi</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+          {% for log in logs %}
+          <tr class="hover:bg-gray-800/50 transition-colors">
+            <td class="px-5 py-3 text-gray-400 whitespace-nowrap text-xs font-mono">
+              {{ log.started_at.strftime('%d/%m/%Y %H:%M:%S') if log.started_at else '—' }}
+            </td>
+            <td class="px-5 py-3 text-gray-300 font-medium whitespace-nowrap">
+              {{ group_map.get(log.group_id, 'Nhóm #' ~ log.group_id) }}
+            </td>
+            <td class="px-5 py-3 text-center whitespace-nowrap">
+              <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium
+                {% if log.status == 'success' %}bg-green-900/80 text-green-300
+                {% elif log.status == 'error' %}bg-red-900/80 text-red-300
+                {% else %}bg-yellow-900/80 text-yellow-300{% endif %}">
+                {% if log.status == 'success' %}✓ Thành công
+                {% elif log.status == 'error' %}✕ Thất bại
+                {% else %}⏳ Đang chạy{% endif %}
+              </span>
+            </td>
+            <td class="px-5 py-3 text-center text-gray-200 font-mono text-xs">
+              {{ log.posts_found }}
+            </td>
+            <td class="px-5 py-3 text-center text-green-400 font-mono text-xs">
+              {{ log.posts_sent }}
+            </td>
+            <td class="px-5 py-3 text-xs text-gray-400 max-w-md">
+              {% if log.error_msg %}
+                <span class="text-red-400 font-mono bg-red-950/40 px-2 py-0.5 rounded border border-red-900/50 block truncate" title="{{ log.error_msg }}">
+                  {{ log.error_msg }}
+                </span>
+              {% elif log.status == 'success' %}
+                <span class="text-gray-500">Hoàn tất bình thường</span>
+              {% else %}
+                <span class="text-yellow-500">Đang thực hiện chu kỳ quét...</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="6" class="px-5 py-12 text-center text-gray-600">
+              Chưa có lịch sử quét nào được ghi nhận.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
