@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
-playwright
+playwright==1.49.0
 apscheduler
 sqlmodel
 python-dotenv
