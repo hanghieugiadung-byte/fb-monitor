@@ -404,6 +404,22 @@
         </form>
       </div>
 
+      <!-- Discovery Live Logs Box -->
+      <div x-show="discoveryLogs.length > 0" class="bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-2">
+        <div class="flex items-center justify-between text-xs text-slate-400 font-mono">
+          <span class="flex items-center gap-2">
+            <span class="inline-block w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
+            Nhật ký tìm kiếm trực tiếp (Discovery Logs)
+          </span>
+          <button @click="discoveryLogs = []" class="text-slate-500 hover:text-slate-300">✕ Ẩn nhật ký</button>
+        </div>
+        <div class="bg-slate-950 border border-slate-800/80 rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs text-slate-300 space-y-1">
+          <template x-for="(log, idx) in discoveryLogs" :key="idx">
+            <div :class="log.includes('LỖI') || log.includes('CẢNH BÁO') ? 'text-rose-400 font-semibold' : (log.includes('Hoàn tất') || log.includes('Tìm thấy') ? 'text-emerald-400 font-semibold' : 'text-slate-300')" x-text="log"></div>
+          </template>
+        </div>
+      </div>
+
       <!-- Discovered Groups Results -->
       <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
         <div class="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
@@ -1534,6 +1550,7 @@
           max_results: 15
         },
         discoveredResults: [],
+        discoveryLogs: [],
         isDiscovering: false,
         joinedGroupIds: JSON.parse(localStorage.getItem('fbn_joined_group_ids') || '[]'),
 
@@ -1715,6 +1732,8 @@
           if (!this.discoveryForm.keyword.trim()) return;
           this.isDiscovering = true;
           this.discoveredResults = [];
+          this.discoveryLogs = [];
+          this.discoveryLogs.push(`[${new Date().toLocaleTimeString()}] Bắt đầu tìm kiếm nhóm với từ khóa: "${this.discoveryForm.keyword}"...`);
           this.showToast('Đang tìm kiếm nhóm trên Facebook...', 'info');
 
           try {
@@ -1725,6 +1744,9 @@
             });
             if (res.ok) {
               const data = await res.json();
+              if (data.logs && data.logs.length > 0) {
+                this.discoveryLogs.push(...data.logs);
+              }
               this.discoveredResults = data.groups || [];
               if (this.discoveredResults.length > 0) {
                 this.showToast(`Tìm thấy ${this.discoveredResults.length} nhóm phù hợp!`, 'success');
@@ -1732,9 +1754,11 @@
                 this.showToast('Không tìm thấy nhóm nào khớp với điều kiện lọc.', 'warning');
               }
             } else {
+              this.discoveryLogs.push('LỖI: Máy chủ phản hồi mã ' + res.status);
               this.showToast('Lỗi khi tìm kiếm nhóm', 'error');
             }
           } catch (e) {
+            this.discoveryLogs.push('LỖI KẾT NỐI: ' + String(e));
             this.showToast('Lỗi kết nối máy chủ', 'error');
           } finally {
             this.isDiscovering = false;

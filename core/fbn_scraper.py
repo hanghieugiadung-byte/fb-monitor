@@ -14,6 +14,57 @@ from playwright.async_api import async_playwright, Browser, BrowserContext, Page
 from core.cookie_manager import parse_facebook_cookies
 
 
+CHROMIUM_STEALTH_ARGS = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-blink-features=AutomationControlled",
+    "--disable-infobars",
+    "--disable-background-networking",
+    "--disable-default-apps",
+    "--disable-extensions",
+    "--disable-sync",
+    "--disable-translate",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--hide-scrollbars",
+    "--mute-audio",
+]
+
+STEALTH_INIT_SCRIPT = """
+// 1. Hide webdriver property
+Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined,
+});
+
+// 2. Mock chrome object
+window.chrome = {
+    runtime: {},
+    loadTimes: function() {},
+    csi: function() {},
+    app: {},
+};
+
+// 3. Mock languages and plugins
+Object.defineProperty(navigator, 'languages', {
+    get: () => ['vi-VN', 'vi', 'en-US', 'en'],
+});
+Object.defineProperty(navigator, 'plugins', {
+    get: () => [1, 2, 3, 4, 5],
+});
+
+// 4. Overwrite notification permissions query
+const originalQuery = window.navigator.permissions ? window.navigator.permissions.query : null;
+if (originalQuery) {
+    window.navigator.permissions.query = (parameters) => (
+        parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+    );
+}
+"""
+
+
 def extract_group_identifier(raw_url_or_id: str) -> str:
     """Extract clean group ID or alias from URL or raw ID."""
     raw = raw_url_or_id.strip()
@@ -221,7 +272,7 @@ class FbnScraper:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                    args=CHROMIUM_STEALTH_ARGS,
                 )
                 report["browser_ok"] = True
                 report["browser_version"] = browser.version
@@ -232,6 +283,7 @@ class FbnScraper:
                     **device,
                     locale="vi-VN",
                 )
+                await context.add_init_script(STEALTH_INIT_SCRIPT)
 
                 # Inject cookies
                 await context.add_cookies(self.cookies_list)
@@ -301,13 +353,14 @@ class FbnScraper:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                    args=CHROMIUM_STEALTH_ARGS,
                 )
                 device = p.devices.get("Pixel 7") or p.devices["Pixel 5"]
                 context = await browser.new_context(
                     **device,
                     locale="vi-VN",
                 )
+                await context.add_init_script(STEALTH_INIT_SCRIPT)
                 await context.add_cookies(self.cookies_list)
                 page = await context.new_page()
 
@@ -321,10 +374,34 @@ class FbnScraper:
                     return [], logs
 
                 # Check if session redirected to login
-                if "login" in page.url.lower():
-                    logs.append("CẢNH BÁO: Facebook chuyển hướng đến trang đăng nhập. Cookie đã hết hạn.")
+                current_url = page.url.lower()
+                if "login" in current_url:
+                    logs.append("CẢNH BÁO: Facebook chuyển hướng đến trang đăng nhập. Cookie đã hết hạn hoặc cần cập nhật.")
                     await browser.close()
                     return [], logs
+
+                # Close any overlay dialogs / app install modals
+                try:
+                    close_buttons = await page.query_selector_all(
+                        'div[role="dialog"] button, [aria-label*="Đóng"], [aria-label*="Close"], '
+                        'text="Lúc khác", text="Không phải bây giờ", text="Để sau", text="Not now", text="Close"'
+                    )
+                    for cbtn in close_buttons[:3]:
+                        try:
+                            if await cbtn.is_visible():
+                                await cbtn.click(timeout=800)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+
+                # Check if group is private and account not joined
+                try:
+                    page_text = (await page.inner_text("body") or "").lower()
+                    if "bạn phải tham gia nhóm này để xem" in page_text or "nội dung này hiện không khả dụng" in page_text:
+                        logs.append("⚠️ CẢNH BÁO: Đây là Nhóm Riêng Tư (Private) và tài khoản Facebook của bạn chưa tham gia nhóm. Hãy mở Facebook và bấm Tham gia nhóm trước.")
+                except Exception:
+                    pass
 
                 # Scroll down 2-3 times to load dynamic feed content
                 for scroll_i in range(2):
@@ -551,9 +628,9 @@ class FbnScraper:
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
         """
         Automatically search and discover Facebook groups based on keyword and filtering conditions.
-        privacy_filter: 'all', 'public', or 'private'
-        Returns:
-            (groups_found, logs)
+        Uses dual-strategy:
+        1. Fast, resilient Mobile Web search (m.facebook.com) - immune to datacenter bot shields.
+        2. Stealth Desktop Web search fallback (www.facebook.com).
         """
         logs: List[str] = []
         kw_clean = keyword.strip()
@@ -566,89 +643,115 @@ class FbnScraper:
             return [], logs
 
         discovered_groups: List[Dict[str, Any]] = []
+        seen_clean_ids = set()
 
         try:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                    args=CHROMIUM_STEALTH_ARGS,
                 )
-                # Desktop browser context for rich group search results
-                context = await browser.new_context(
-                    viewport={"width": 1280, "height": 800},
-                    locale="vi-VN",
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                )
-                await context.add_cookies(self.cookies_list)
-                page = await context.new_page()
 
-                search_url = f"https://www.facebook.com/search/groups/?q={encoded_kw}"
-                logs.append(f"Truy cập: {search_url}")
+                # ============================================================
+                # STRATEGY 1: Mobile Web Search (m.facebook.com)
+                # Highly resilient on VPS datacenter IPs, returns direct HTML
+                # ============================================================
+                device = p.devices.get("Pixel 7") or p.devices["Pixel 5"]
+                mobile_context = await browser.new_context(
+                    **device,
+                    locale="vi-VN",
+                )
+                await mobile_context.add_init_script(STEALTH_INIT_SCRIPT)
+                await mobile_context.add_cookies(self.cookies_list)
+                mobile_page = await mobile_context.new_page()
+
+                mobile_search_url = f"https://m.facebook.com/search/groups/?q={encoded_kw}"
+                logs.append(f"Kênh 1 (Mobile Web): Truy cập {mobile_search_url}")
 
                 try:
-                    await page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
-                    await asyncio.sleep(3.0)
-                except Exception as e:
-                    logs.append(f"Không thể mở trang tìm kiếm: {e}")
-                    await browser.close()
-                    return [], logs
+                    await mobile_page.goto(mobile_search_url, wait_until="domcontentloaded", timeout=25000)
+                    await asyncio.sleep(2.5)
 
-                # Check if redirected to login
-                if "login" in page.url.lower():
-                    logs.append("CẢNH BÁO: Cookie đã hết hạn khi tìm kiếm nhóm.")
-                    await browser.close()
-                    return [], logs
-
-                # Scroll once or twice to load group results
-                for _ in range(2):
-                    await page.evaluate("window.scrollBy(0, 1000)")
-                    await asyncio.sleep(1.5)
-
-                # Look for group links in search results
-                # Group links have format /groups/<id> or /groups/<vanity>
-                group_anchors = await page.query_selector_all("a[href*='/groups/']")
-                logs.append(f"Tìm thấy {len(group_anchors)} đường dẫn liên quan đến nhóm.")
-
-                seen_clean_ids = set()
-
-                for a in group_anchors:
-                    if len(discovered_groups) >= max_results:
-                        break
+                    # Close app install prompt / dialog if present
                     try:
-                        href = await a.get_attribute("href") or ""
-                        # Filter out non-group search noise (e.g. /groups/feed, /groups/discover, etc.)
-                        clean_id = extract_group_identifier(href)
-                        if not clean_id or clean_id in ("feed", "discover", "joins", "search", "create") or clean_id in seen_clean_ids:
+                        close_btns = await mobile_page.query_selector_all(
+                            'div[role="dialog"] button, [aria-label*="Đóng"], [aria-label*="Close"], '
+                            'text="Lúc khác", text="Không phải bây giờ", text="Để sau", text="Not now", text="Close"'
+                        )
+                        for cbtn in close_btns[:3]:
+                            try:
+                                if await cbtn.is_visible():
+                                    await cbtn.click(timeout=800)
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+
+                    # Scroll 2 times to trigger lazy-loaded groups
+                    for _ in range(2):
+                        await mobile_page.evaluate("window.scrollBy(0, 1000)")
+                        await asyncio.sleep(1.2)
+
+                    # Extract groups via JavaScript
+                    extract_mobile_js = """
+                    () => {
+                        const items = [];
+                        const seen = new Set();
+                        const ignored = ['feed', 'discover', 'joins', 'search', 'create', 'notifications', 'messages', 'me', 'home.php', 'live'];
+
+                        // Scan all links leading to groups
+                        const links = Array.from(document.querySelectorAll('a[href*="/groups/"]'));
+                        for (const a of links) {
+                            const href = a.getAttribute('href') || '';
+                            const m = href.match(/\\/groups\\/([^/?#]+)/);
+                            if (!m) continue;
+                            const cid = m[1].trim();
+                            if (!cid || ignored.includes(cid) || seen.has(cid)) continue;
+
+                            // Find nearest enclosing card container
+                            let container = a.closest('div[role="article"]') ||
+                                            a.closest('div[data-pagelet]') ||
+                                            a.closest('div[id^="mall_"]') ||
+                                            a.parentElement.parentElement;
+
+                            const cardText = container ? (container.innerText || '') : (a.innerText || '');
+                            const rawName = (a.innerText || '').trim().split('\\n')[0].trim();
+                            const lines = cardText.split('\\n').map(l => l.trim()).filter(Boolean);
+                            const bestName = (rawName && rawName.length >= 2 && !rawName.toLowerCase().includes('xem thêm')) ? rawName : (lines[0] || cid);
+
+                            if (bestName.length > 100 || bestName.toLowerCase().includes('facebook.com')) continue;
+
+                            seen.add(cid);
+                            items.push({
+                                clean_id: cid,
+                                name: bestName,
+                                href: href,
+                                card_text: cardText,
+                                snippet: lines.slice(1, 4).join(' • ')
+                            });
+                        }
+                        return items;
+                    }
+                    """
+                    mobile_raw_items = await mobile_page.evaluate(extract_mobile_js)
+                    logs.append(f"Kênh 1: Bóc tách được {len(mobile_raw_items)} nhóm tiềm năng từ giao diện Mobile.")
+
+                    for item in mobile_raw_items:
+                        if len(discovered_groups) >= max_results:
+                            break
+                        cid = item["clean_id"]
+                        if cid in seen_clean_ids:
                             continue
 
-                        # Extract card container
-                        card_text = ""
-                        try:
-                            # Ascend to the parent container
-                            container = await a.evaluate_handle("el => el.closest('div[role=\"article\"]') || el.closest('div[role=\"feed\"] > div') || el.parentElement.parentElement.parentElement")
-                            if container:
-                                card_text = (await container.as_element().inner_text() or "").strip()
-                        except Exception:
-                            card_text = (await a.inner_text() or "").strip()
-
-                        if not card_text:
-                            card_text = (await a.inner_text() or "").strip()
-
-                        lines = [line.strip() for line in card_text.splitlines() if line.strip()]
-                        group_name = lines[0] if lines else clean_id
-                        if len(group_name) > 100 or "facebook.com" in group_name.lower():
-                            continue
+                        card_text = item["card_text"]
+                        card_lower = card_text.lower()
 
                         # Determine privacy
-                        is_public = False
-                        is_private = False
-                        card_lower = card_text.lower()
-                        if "công khai" in card_lower or "public" in card_lower:
-                            is_public = True
-                        if "riêng tư" in card_lower or "private" in card_lower:
-                            is_private = True
-
-                        privacy_val = "public" if is_public else ("private" if is_private else "unknown")
+                        is_public = ("công khai" in card_lower or "public" in card_lower)
+                        is_private = ("riêng tư" in card_lower or "private" in card_lower)
+                        if not is_public and not is_private:
+                            is_public = True  # Default public if unclear
+                        privacy_val = "public" if is_public else "private"
 
                         # Privacy filter check
                         if privacy_filter == "public" and not is_public:
@@ -656,23 +759,20 @@ class FbnScraper:
                         if privacy_filter == "private" and not is_private:
                             continue
 
-                        # Parse member count
+                        # Member count check
                         members_count = parse_member_count(card_text)
                         if min_members > 0 and members_count > 0 and members_count < min_members:
-                            continue  # Doesn't meet minimum members threshold
+                            continue
 
-                        seen_clean_ids.add(clean_id)
-                        canonical_url = f"https://www.facebook.com/groups/{clean_id}"
-
-                        # Detect post approval from card snippet
-                        card_snippet = " • ".join(lines[1:3]) if len(lines) > 1 else ""
+                        seen_clean_ids.add(cid)
+                        canonical_url = f"https://www.facebook.com/groups/{cid}"
                         post_perm = "approval" if ("phê duyệt" in card_lower or "duyệt bài" in card_lower) else ("free" if is_public else "unknown")
-                        post_perm_text = "Cần Admin phê duyệt" if post_perm == "approval" else ("Đăng tự do (Công khai)" if is_public else "Chưa rõ")
+                        post_perm_text = "Cần Admin phê duyệt" if post_perm == "approval" else ("Đăng tự do" if is_public else "Chưa rõ")
 
                         discovered_groups.append({
-                            "name": group_name,
+                            "name": item["name"],
                             "fb_url": canonical_url,
-                            "clean_group_id": clean_id,
+                            "clean_group_id": cid,
                             "member_count": members_count,
                             "member_text": f"{members_count:,} thành viên" if members_count else "Không rõ",
                             "privacy": privacy_val,
@@ -680,11 +780,113 @@ class FbnScraper:
                             "post_permission_text": post_perm_text,
                             "comment_permission": "open",
                             "comment_permission_text": "Bình luận mở",
-                            "snippet": card_snippet,
+                            "snippet": item["snippet"],
                         })
 
-                    except Exception as parse_e:
-                        logger.debug(f"Error parsing group card: {parse_e}")
+                except Exception as mobile_err:
+                    logs.append(f"Lỗi Kênh 1 (Mobile Search): {mobile_err}")
+
+                await mobile_page.close()
+                await mobile_context.close()
+
+                # ============================================================
+                # STRATEGY 2: Desktop Web Search (Fallback if Mobile is empty)
+                # ============================================================
+                if len(discovered_groups) == 0:
+                    logs.append("Kênh 1 chưa có kết quả, đang kích hoạt Kênh 2 (Desktop Web Search)...")
+                    desktop_context = await browser.new_context(
+                        viewport={"width": 1280, "height": 800},
+                        locale="vi-VN",
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    )
+                    await desktop_context.add_init_script(STEALTH_INIT_SCRIPT)
+                    await desktop_context.add_cookies(self.cookies_list)
+                    desktop_page = await desktop_context.new_page()
+
+                    desktop_search_url = f"https://www.facebook.com/search/groups/?q={encoded_kw}"
+                    logs.append(f"Kênh 2 (Desktop Web): Truy cập {desktop_search_url}")
+
+                    try:
+                        await desktop_page.goto(desktop_search_url, wait_until="domcontentloaded", timeout=30000)
+                        await asyncio.sleep(3.0)
+
+                        if "login" in desktop_page.url.lower():
+                            logs.append("CẢNH BÁO: Facebook desktop chuyển hướng về đăng nhập (Cookie hết hạn hoặc Checkpoint).")
+                        else:
+                            for _ in range(2):
+                                await desktop_page.evaluate("window.scrollBy(0, 1000)")
+                                await asyncio.sleep(1.5)
+
+                            group_anchors = await desktop_page.query_selector_all("a[href*='/groups/']")
+                            logs.append(f"Kênh 2: Tìm thấy {len(group_anchors)} liên kết nhóm trên Desktop.")
+
+                            for a in group_anchors:
+                                if len(discovered_groups) >= max_results:
+                                    break
+                                try:
+                                    href = await a.get_attribute("href") or ""
+                                    cid = extract_group_identifier(href)
+                                    if not cid or cid in ("feed", "discover", "joins", "search", "create") or cid in seen_clean_ids:
+                                        continue
+
+                                    card_text = ""
+                                    try:
+                                        container = await a.evaluate_handle("el => el.closest('div[role=\"article\"]') || el.closest('div[role=\"feed\"] > div') || el.parentElement.parentElement.parentElement")
+                                        if container:
+                                            card_text = (await container.as_element().inner_text() or "").strip()
+                                    except Exception:
+                                        card_text = (await a.inner_text() or "").strip()
+
+                                    lines = [line.strip() for line in card_text.splitlines() if line.strip()]
+                                    group_name = lines[0] if lines else cid
+                                    if len(group_name) > 100 or "facebook.com" in group_name.lower():
+                                        continue
+
+                                    is_public = False
+                                    is_private = False
+                                    card_lower = card_text.lower()
+                                    if "công khai" in card_lower or "public" in card_lower:
+                                        is_public = True
+                                    if "riêng tư" in card_lower or "private" in card_lower:
+                                        is_private = True
+                                    privacy_val = "public" if is_public else ("private" if is_private else "unknown")
+
+                                    if privacy_filter == "public" and not is_public:
+                                        continue
+                                    if privacy_filter == "private" and not is_private:
+                                        continue
+
+                                    members_count = parse_member_count(card_text)
+                                    if min_members > 0 and members_count > 0 and members_count < min_members:
+                                        continue
+
+                                    seen_clean_ids.add(cid)
+                                    canonical_url = f"https://www.facebook.com/groups/{cid}"
+                                    card_snippet = " • ".join(lines[1:3]) if len(lines) > 1 else ""
+                                    post_perm = "approval" if ("phê duyệt" in card_lower or "duyệt bài" in card_lower) else ("free" if is_public else "unknown")
+                                    post_perm_text = "Cần Admin phê duyệt" if post_perm == "approval" else ("Đăng tự do" if is_public else "Chưa rõ")
+
+                                    discovered_groups.append({
+                                        "name": group_name,
+                                        "fb_url": canonical_url,
+                                        "clean_group_id": cid,
+                                        "member_count": members_count,
+                                        "member_text": f"{members_count:,} thành viên" if members_count else "Không rõ",
+                                        "privacy": privacy_val,
+                                        "post_permission": post_perm,
+                                        "post_permission_text": post_perm_text,
+                                        "comment_permission": "open",
+                                        "comment_permission_text": "Bình luận mở",
+                                        "snippet": card_snippet,
+                                    })
+                                except Exception as d_parse_err:
+                                    logger.debug(f"Desktop parse error: {d_parse_err}")
+
+                    except Exception as desk_err:
+                        logs.append(f"Lỗi Kênh 2 (Desktop Search): {desk_err}")
+
+                    await desktop_page.close()
+                    await desktop_context.close()
 
                 await browser.close()
                 logs.append(f"Hoàn tất: Tìm thấy {len(discovered_groups)} nhóm phù hợp với điều kiện!")
@@ -717,10 +919,11 @@ class FbnScraper:
             async with async_playwright() as p:
                 browser = await p.chromium.launch(
                     headless=self.headless,
-                    args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+                    args=CHROMIUM_STEALTH_ARGS,
                 )
                 device = p.devices.get("Pixel 7") or p.devices["Pixel 5"]
                 context = await browser.new_context(**device, locale="vi-VN")
+                await context.add_init_script(STEALTH_INIT_SCRIPT)
                 await context.add_cookies(self.cookies_list)
                 page = await context.new_page()
 
