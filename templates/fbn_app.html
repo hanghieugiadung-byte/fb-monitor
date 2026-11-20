@@ -560,18 +560,26 @@
 
         <div class="flex items-center gap-3">
           <button
+            @click="showSyncModal = true"
+            class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5"
+            title="Đẩy trực tiếp toàn bộ Nhóm & Từ khóa mới từ máy này lên VPS (không cần tải file)"
+          >
+            <span>🚀</span> Đồng bộ lên VPS
+          </button>
+
+          <button
             @click="exportDataJson()"
             class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 shadow transition-all flex items-center gap-1.5"
             title="Xuất toàn bộ Nhóm, Từ khóa, Chủ đề ra file JSON để đồng bộ lên VPS hoặc sao lưu"
           >
-            <span>📥</span> Xuất dữ liệu (JSON)
+            <span>📥</span> Xuất JSON
           </button>
 
           <label
             class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 shadow transition-all flex items-center gap-1.5 cursor-pointer"
             title="Nhập dữ liệu Nhóm, Từ khóa từ file JSON vào hệ thống (tự động chống trùng lặp)"
           >
-            <span>📤</span> Nhập dữ liệu (JSON)
+            <span>📤</span> Nhập JSON
             <input type="file" accept=".json" @change="importDataJson($event)" class="hidden" />
           </label>
 
@@ -581,6 +589,71 @@
           >
             <span>🏷️</span> Thêm chủ đề mới
           </button>
+        </div>
+      </div>
+
+      <!-- Direct Sync to VPS Modal -->
+      <div x-show="showSyncModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div @click.away="showSyncModal = false" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 class="text-base font-bold text-white flex items-center gap-2">
+              <span>🚀</span> Đồng bộ dữ liệu Local ➔ VPS
+            </h3>
+            <button @click="showSyncModal = false" class="text-slate-500 hover:text-slate-300">✕</button>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <p class="text-slate-300">
+              Chức năng này sẽ chuyển toàn bộ <strong class="text-blue-400" x-text="groups.length + ' nhóm'"></strong>, <strong class="text-purple-400" x-text="keywords.length + ' từ khóa'"></strong> và <strong class="text-amber-400" x-text="topics.length + ' chủ đề'"></strong> từ máy này lên VPS của bạn.
+            </p>
+
+            <div class="p-3 rounded-lg bg-emerald-950/40 border border-emerald-900/60 text-emerald-300 space-y-1">
+              <p class="font-semibold flex items-center gap-1"><span>🛡️</span> Cam kết bảo toàn dữ liệu trên VPS:</p>
+              <ul class="list-disc list-inside text-[11px] text-emerald-400/90 space-y-0.5">
+                <li><strong>KHÔNG mất Cookie</strong> tài khoản Facebook đang cào trên VPS</li>
+                <li><strong>KHÔNG mất bài viết</strong> đã lưu và lịch sử quét trên VPS</li>
+                <li>Tự động bỏ qua nhóm đã có, chỉ nạp thêm nhóm mới (không trùng lặp)</li>
+              </ul>
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Địa chỉ máy chủ VPS (URL)</label>
+              <input
+                type="text"
+                x-model="syncVpsUrl"
+                placeholder="https://skeyshome.io.vn"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label class="block font-semibold text-slate-300 mb-1">Mật khẩu quản trị VPS (Nếu có đặt ADMIN_PASSWORD)</label>
+              <input
+                type="password"
+                x-model="syncVpsPassword"
+                placeholder="Để trống nếu VPS không đặt mật khẩu"
+                class="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+            <button
+              @click="showSyncModal = false"
+              class="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300"
+            >
+              Hủy
+            </button>
+            <button
+              @click="syncToRemoteVps()"
+              :disabled="isSyncingVps || !syncVpsUrl.trim()"
+              class="px-5 py-2 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white shadow-lg shadow-blue-600/20 flex items-center gap-2"
+            >
+              <span x-show="!isSyncingVps">🚀 Bắt đầu đồng bộ</span>
+              <span x-show="isSyncingVps" class="animate-spin">⏳</span>
+              <span x-show="isSyncingVps">Đang đẩy lên VPS...</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1558,6 +1631,12 @@
         selectedKeywordIds: [],
         selectedAccountId: null,
 
+        showSyncModal: false,
+        syncVpsUrl: localStorage.getItem('fbn_sync_vps_url') || 'https://skeyshome.io.vn',
+        syncVpsPassword: '',
+        syncVpsUsername: 'admin',
+        isSyncingVps: false,
+
         // Discovery state
         discoveryForm: {
           keyword: '',
@@ -1625,6 +1704,47 @@
             this.showToast('File JSON không hợp lệ: ' + err.message, 'error');
           } finally {
             event.target.value = '';
+          }
+        },
+
+        async syncToRemoteVps() {
+          if (!this.syncVpsUrl.trim()) {
+            this.showToast('Vui lòng nhập URL của VPS (VD: https://skeyshome.io.vn)', 'warning');
+            return;
+          }
+          this.isSyncingVps = true;
+          this.showToast('Đang kết nối và đẩy dữ liệu lên VPS...', 'info');
+
+          try {
+            const exportRes = await fetch('/api/data/export');
+            if (!exportRes.ok) throw new Error('Không thể lấy dữ liệu local');
+            const localData = await exportRes.json();
+
+            const targetUrl = this.syncVpsUrl.replace(/\/+$/, '') + '/api/data/import';
+            const headers = { 'Content-Type': 'application/json' };
+            if (this.syncVpsPassword) {
+              headers['Authorization'] = 'Basic ' + btoa((this.syncVpsUsername || 'admin') + ':' + this.syncVpsPassword);
+            }
+
+            const syncRes = await fetch(targetUrl, {
+              method: 'POST',
+              headers: headers,
+              body: JSON.stringify(localData)
+            });
+
+            if (syncRes.ok) {
+              const syncResult = await syncRes.json();
+              localStorage.setItem('fbn_sync_vps_url', this.syncVpsUrl);
+              this.showToast(syncResult.message || 'Đồng bộ lên VPS thành công rực rỡ!', 'success');
+              this.showSyncModal = false;
+            } else {
+              const errText = await syncRes.text();
+              this.showToast(`VPS phản hồi lỗi (${syncRes.status}): ${errText.slice(0, 100)}`, 'error');
+            }
+          } catch (err) {
+            this.showToast('Lỗi kết nối VPS: ' + err.message, 'error');
+          } finally {
+            this.isSyncingVps = false;
           }
         },
 
