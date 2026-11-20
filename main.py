@@ -6,9 +6,10 @@ FastAPI backend with Multi-Account, Selective Scraping & Group Discovery.
 from contextlib import asynccontextmanager
 import uvicorn
 import secrets
-from fastapi import FastAPI, Request, HTTPException, Depends, status
+from datetime import datetime, timezone
+from fastapi import FastAPI, Request, HTTPException, Depends, status, UploadFile, File
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from sqlmodel import select, delete
@@ -628,6 +629,106 @@ async def clear_seen_posts():
         session.exec(delete(SeenPost))
         session.commit()
     return {"status": "success", "message": "Đã xóa toàn bộ bài viết đã lưu"}
+
+
+# ── API: Data Sync & Backup (Export / Import) ───────────────────────────────
+
+@app.get("/api/data/export")
+async def export_data():
+    """Export groups, keywords, and topics as JSON for syncing between Local and VPS."""
+    with get_db_session() as session:
+        groups = session.exec(select(GroupItem)).all()
+        keywords = session.exec(select(KeywordItem)).all()
+        topics = session.exec(select(TopicItem)).all()
+
+    data = {
+        "version": "1.0",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "topics": [t.model_dump(exclude={"id", "created_at"}) for t in topics],
+        "keywords": [k.model_dump(exclude={"id", "created_at"}) for k in keywords],
+        "groups": [g.model_dump(exclude={"id", "last_scraped_at", "created_at"}) for g in groups],
+    }
+    return JSONResponse(
+        content=data,
+        headers={"Content-Disposition": f"attachment; filename=fb_monitor_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"},
+    )
+
+
+class ImportDataPayload(BaseModel):
+    topics: Optional[List[dict]] = None
+    keywords: Optional[List[dict]] = None
+    groups: Optional[List[dict]] = None
+
+
+@app.post("/api/data/import")
+async def import_data(payload: ImportDataPayload):
+    """Import and seamlessly merge groups, keywords, and topics without duplicates."""
+    added_topics = 0
+    added_keywords = 0
+    added_groups = 0
+
+    with get_db_session() as session:
+        # 1. Topics
+        if payload.topics:
+            for t_data in payload.topics:
+                t_name = (t_data.get("name") or "").strip()
+                if not t_name:
+                    continue
+                exist_t = session.exec(select(TopicItem).where(TopicItem.name == t_name)).first()
+                if not exist_t:
+                    new_t = TopicItem(name=t_name, color=t_data.get("color", "blue"))
+                    session.add(new_t)
+                    added_topics += 1
+            session.commit()
+
+        # 2. Keywords
+        if payload.keywords:
+            for k_data in payload.keywords:
+                k_text = (k_data.get("text") or "").strip()
+                if not k_text:
+                    continue
+                exist_k = session.exec(select(KeywordItem).where(KeywordItem.text == k_text)).first()
+                if not exist_k:
+                    new_k = KeywordItem(text=k_text, is_active=k_data.get("is_active", True))
+                    session.add(new_k)
+                    added_keywords += 1
+            session.commit()
+
+        # 3. Groups
+        if payload.groups:
+            for g_data in payload.groups:
+                fb_url = (g_data.get("fb_url") or "").strip()
+                g_name = (g_data.get("name") or "").strip()
+                if not fb_url:
+                    continue
+                cid = g_data.get("clean_group_id") or extract_group_identifier(fb_url)
+                exist_g = session.exec(select(GroupItem).where(GroupItem.clean_group_id == cid)).first()
+                if not exist_g:
+                    new_g = GroupItem(
+                        name=g_name or cid,
+                        fb_url=fb_url,
+                        clean_group_id=cid,
+                        member_count=g_data.get("member_count", 0),
+                        privacy=g_data.get("privacy", "unknown"),
+                        topic_name=g_data.get("topic_name", "Chưa phân loại"),
+                        is_joined=g_data.get("is_joined", False),
+                        is_active=g_data.get("is_active", True),
+                        post_permission=g_data.get("post_permission", "unknown"),
+                        post_permission_text=g_data.get("post_permission_text", "Chưa kiểm tra"),
+                        comment_permission=g_data.get("comment_permission", "open"),
+                        comment_permission_text=g_data.get("comment_permission_text", "Bình luận mở"),
+                    )
+                    session.add(new_g)
+                    added_groups += 1
+            session.commit()
+
+    return {
+        "status": "success",
+        "added_topics": added_topics,
+        "added_keywords": added_keywords,
+        "added_groups": added_groups,
+        "message": f"Đã nhập thành công: {added_groups} nhóm mới, {added_keywords} từ khóa mới, {added_topics} chủ đề mới!",
+    }
 
 
 # ── Main Entry Point ────────────────────────────────────────────────────────

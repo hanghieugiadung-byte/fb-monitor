@@ -560,6 +560,22 @@
 
         <div class="flex items-center gap-3">
           <button
+            @click="exportDataJson()"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-blue-400 border border-slate-700 shadow transition-all flex items-center gap-1.5"
+            title="Xuất toàn bộ Nhóm, Từ khóa, Chủ đề ra file JSON để đồng bộ lên VPS hoặc sao lưu"
+          >
+            <span>📥</span> Xuất dữ liệu (JSON)
+          </button>
+
+          <label
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-emerald-400 border border-slate-700 shadow transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Nhập dữ liệu Nhóm, Từ khóa từ file JSON vào hệ thống (tự động chống trùng lặp)"
+          >
+            <span>📤</span> Nhập dữ liệu (JSON)
+            <input type="file" accept=".json" @change="importDataJson($event)" class="hidden" />
+          </label>
+
+          <button
             @click="showAddTopicModal = !showAddTopicModal"
             class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-purple-600 hover:bg-purple-500 text-white shadow transition-all flex items-center gap-1.5"
           >
@@ -1574,6 +1590,42 @@
 
         isGroupMonitored(cleanId) {
           return this.groups.some(g => g.clean_group_id === cleanId || (g.fb_url && g.fb_url.includes(cleanId)));
+        },
+
+        async exportDataJson() {
+          try {
+            window.location.href = '/api/data/export';
+            this.showToast('Đang tải file dữ liệu nhóm & từ khóa...', 'info');
+          } catch {
+            this.showToast('Lỗi khi xuất dữ liệu', 'error');
+          }
+        },
+
+        async importDataJson(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          try {
+            const text = await file.text();
+            const json = JSON.parse(text);
+            this.showToast('Đang nạp dữ liệu vào hệ thống...', 'info');
+            const res = await fetch('/api/data/import', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(json)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              this.showToast(data.message || 'Đồng bộ dữ liệu thành công!', 'success');
+              await this.loadData();
+              this.selectAllGroups(true);
+            } else {
+              this.showToast('Lỗi khi nhập dữ liệu từ file', 'error');
+            }
+          } catch (err) {
+            this.showToast('File JSON không hợp lệ: ' + err.message, 'error');
+          } finally {
+            event.target.value = '';
+          }
         },
 
         async clearAllSeenPosts() {
